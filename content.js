@@ -164,15 +164,25 @@ function extractFromText(text) {
   }
 
   // Client rating (1.0–5.9)
-  // Client rating — require explicit rating context; avoid bare decimals like "0.00 of 0 reviews"
+  // Client rating — Upwork shows it in several ways depending on context:
+  // • Card list:   "Payment verified 5.0 $400K+ spent"  (bare decimal between signals)
+  // • Full page:   "Rating is 5.0 out of 5" / "5.0 of 38 reviews"
+  // • With symbol: "★ 5.0" / "⭐5.0"
   let clientRating = null;
+  // 1. Explicit rating context
   const rmCtx = text.match(/(?:★|[⭐]|rating\s+is)[^\d]*([1-5]\.\d)/i) ||
-                 text.match(/([1-5]\.\d)\s*(?:of\s*5|★|stars?)/i);
+                text.match(/([1-5]\.\d)\s*(?:of\s*5|★|stars?)/i) ||
+                text.match(/([1-5]\.\d{1,2})\s+of\s+[1-9]\d*\s+reviews?/i);
   if (rmCtx) clientRating = parseFloat(rmCtx[1]);
-  // Also catch "4.9 of 38 reviews" pattern (Upwork profile ratings)
+  // 2. Upwork card pattern: "Payment verified 5.0 $NNN spent" or "verified 4.8 $"
   if (!clientRating) {
-    const rmRev = text.match(/([1-5]\.\d)\s+of\s+\d+\s+reviews?/i);
-    if (rmRev) clientRating = parseFloat(rmRev[1]);
+    const rmCard = text.match(/(?:payment\s+(?:method\s+)?verified|verified)[^\d$]{0,10}([1-5]\.\d)/i);
+    if (rmCard) clientRating = parseFloat(rmCard[1]);
+  }
+  // 3. Bare rating near spend marker: "5.0 $400K+"
+  if (!clientRating) {
+    const rmSpend = text.match(/([1-5]\.\d)\s+\$[\d,.]+[Kk+]/);
+    if (rmSpend) clientRating = parseFloat(rmSpend[1]);
   }
 
   return { paymentVerified, daysPosted, proposalsMid, hourlyMid, fixedBudget, clientSpend, clientHires, clientRating };
