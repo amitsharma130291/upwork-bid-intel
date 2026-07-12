@@ -607,13 +607,24 @@ function processDetailPage() {
     // Check that at least one client signal is visible before we inject.
     // Wait for client section to be present before scoring
     // (it loads async and without it we get an artificially high score)
-    const clientCheckText = isFullDetailPage ? (document.body.textContent || '') : text;
-    const hasClientSection = sliderContent && (
-      /payment\s+(un)?verified/i.test(clientCheckText) ||
-      /spent/i.test(clientCheckText) ||
-      /hires/i.test(clientCheckText) ||
-      /\d+\s+reviews?/i.test(clientCheckText)
-    );
+    // Wait for the client section to actually be in the DOM.
+    // IMPORTANT: do NOT check document.body.textContent — it always has "spent/hires"
+    // from the 30 job cards in the left panel, causing instant false-positive.
+    let hasClientSection = false;
+    if (isFullDetailPage) {
+      // On full detail pages the client info is in its own sidebar element.
+      // Only pass when that element is actually present in the DOM.
+      const sidebarCheck = document.querySelector('[data-test="about-client-container"], .cfe-ui-job-about-client');
+      hasClientSection = !!sidebarCheck;
+    } else {
+      // Slider overlay: client section is inside the modal container itself.
+      hasClientSection = sliderContent && (
+        /payment\s+(un)?verified/i.test(text) ||
+        /spent/i.test(text) ||
+        /hires/i.test(text) ||
+        /\d+\s+reviews?/i.test(text)
+      );
+    }
     if (!hasClientSection) return false; // client block still loading — retry
 
     const data = extractFromText(text);
