@@ -66,13 +66,20 @@ function scoreJob(d) {
   }
 
   // ── HOURLY RATE ──
-  if (d.hourlyMid !== null) {
-    if (d.hourlyMid < 10)       addFlag('$' + d.hourlyMid + '/hr — race to bottom', 25);
-    else if (d.hourlyMid < 20)  addFlag('Low rate: ~$' + d.hourlyMid + '/hr', 15);
-    else if (d.hourlyMid < 30)  addFlag('Below-market: ~$' + d.hourlyMid + '/hr', 5);
-    else if (d.hourlyMid >= 60) addGreen('Strong rate: ~$' + d.hourlyMid + '/hr 💰');
-    else if (d.hourlyMid >= 40) addGreen('Good rate: ~$' + d.hourlyMid + '/hr');
-    // $30–39: neutral
+  // Prefer avg hourly rate actually paid (client history) over posted range
+  const effectiveRate = d.avgHourlyPaid !== null ? d.avgHourlyPaid : d.hourlyMid;
+  const rateLabel = d.avgHourlyPaid !== null ? 'avg paid $' + d.avgHourlyPaid + '/hr' : '~$' + d.hourlyMid + '/hr';
+  if (effectiveRate !== null) {
+    if (effectiveRate < 10)       addFlag(rateLabel + ' — race to bottom', 25);
+    else if (effectiveRate < 20)  addFlag('Pays ' + rateLabel + ' on avg — low', 15);
+    else if (effectiveRate < 30)  addFlag('Pays ' + rateLabel + ' on avg', 5);
+    else if (effectiveRate >= 60) addGreen('Pays ' + rateLabel + ' — strong 💰');
+    else if (effectiveRate >= 40) addGreen('Pays ' + rateLabel + ' — good');
+    else                          addGreen('Pays ' + rateLabel);
+    // Note when avg paid is lower than posted range
+    if (d.avgHourlyPaid !== null && d.hourlyMid !== null && d.avgHourlyPaid < d.hourlyMid - 5) {
+      addFlag('Posted $' + d.hourlyMid + '/hr but avg paid is only $' + d.avgHourlyPaid, 0);
+    }
   }
 
   // ── FIXED BUDGET ──
@@ -143,6 +150,11 @@ function extractFromText(text) {
   else if (hrB) hourlyMid = Math.round((+hrB[1] + +hrB[2]) / 2);
   else if (hsA) hourlyMid = +hsA[1];
 
+  // Client's actual avg hourly rate paid (more honest than posted range)
+  let avgHourlyPaid = null;
+  const avgM = text.match(/\$([\d.]+)\s*\/hr\s*avg\s+hourly\s+rate\s+paid/i);
+  if (avgM) avgHourlyPaid = parseFloat(avgM[1]);
+
   // Fixed budget
   let fixedBudget = null;
   const fb = text.match(/(?:est\.?\s*budget|fixed)[:\s]*\$?([\d,]+)/i);
@@ -188,7 +200,7 @@ function extractFromText(text) {
     if (rmSpend) clientRating = parseFloat(rmSpend[1]);
   }
 
-  return { paymentVerified, daysPosted, proposalsMid, hourlyMid, fixedBudget, clientSpend, clientHires, clientRating };
+  return { paymentVerified, daysPosted, proposalsMid, hourlyMid, avgHourlyPaid, fixedBudget, clientSpend, clientHires, clientRating };
 }
 
 // ─── Badge (compact, inline) ──────────────────────────────────────────────────
