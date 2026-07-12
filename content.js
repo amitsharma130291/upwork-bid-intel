@@ -473,30 +473,53 @@ function hexToRgb(hex) {
 
 
 // ─── Card processing (search results) ────────────────────────────────────────
+// Track processed jobs by their URL — survives React DOM re-renders
+const processedJobUrls = new Set();
+
 function processCards() {
-  // Priority-fallback: try selectors from most specific to least.
-  // Stops at the first selector that returns results — avoids ancestor+descendant matches.
-  const CARD_SELECTORS = [
+  // Upwork split-pane: left = job list, right = preview/detail
+  // Restrict to the LEFT pane only by finding the job list container
+  const listPane = document.querySelector([
+    '[data-test="job-search-results"]',
+    '[class*="SearchResults"]',
+    '[class*="search-results"]',
+    'main [role="list"]',
+    'main',
+  ].join(',')) || document.body;
+
+  // Find job cards — only within the list pane
+  const SELECTORS = [
     '[data-test="job-tile"]',
-    '[class*="JobTile"]',
+    '[class*="JobTile"]:not([class*="Preview"])',
     '[class*="job-tile"]',
-    'article[class*="job"]',
-    'section[class*="job"]',
   ];
 
   let rawCards = [];
-  for (const sel of CARD_SELECTORS) {
-    const found = document.querySelectorAll(sel);
+  for (const sel of SELECTORS) {
+    const found = listPane.querySelectorAll(sel);
     if (found.length) { rawCards = Array.from(found); break; }
   }
 
-  // Remove any card that is a descendant of another card in the set (dedup nesting)
-  const cards = rawCards.filter(c => !rawCards.some(other => other !== c && other.contains(c)));
+  // Fallback: any article/section in the list pane
+  if (!rawCards.length) {
+    rawCards = Array.from(listPane.querySelectorAll('article, section[class*="job"]'));
+  }
+
+  // Remove descendants — keep only the outermost card element
+  const cards = rawCards.filter(c => !rawCards.some(o => o !== c && o.contains(c)));
 
   cards.forEach(card => {
-    // Skip if already processed
+    // Get the job URL as a stable unique key
+    const link = card.querySelector('a[href*="/jobs/"]') || card.querySelector('a[href*="job_uid"]');
+    const jobKey = link ? (link.href || link.getAttribute('href') || '') : '';
+
+    // Use URL-based dedup — survives React re-renders that wipe DOM attributes
+    if (jobKey && processedJobUrls.has(jobKey)) return;
+    // Also check DOM attribute as secondary guard
     if (card.dataset.ubiDone) return;
-    // Mark immediately — before any async work — to block re-entry
+
+    // Mark immediately
+    if (jobKey) processedJobUrls.add(jobKey);
     card.dataset.ubiDone = '1';
 
     const text = card.textContent || '';
@@ -505,23 +528,26 @@ function processCards() {
     const badge = renderCompact(result);
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'margin:5px 0 3px;line-height:1;';
+    wrapper.dataset.ubiBadge = '1';
+    wrapper.style.cssText = 'margin:4px 0 2px!important;line-height:1!important;display:block!important;';
     wrapper.appendChild(badge);
 
-    // Find the job title — h2/h3 is the title, NOT the metadata row
-    // Insert the badge AFTER the title so it appears below the job name
-    const titleEl = card.querySelector('h2, h3');
-    if (titleEl) {
-      titleEl.parentNode.insertBefore(wrapper, titleEl.nextSibling);
+    // Insert after the job title (h2 or h3)
+    // Upwork wraps titles in h2 > a — find that and insert after its parent row
+    const h2 = card.querySelector('h2, h3');
+    if (h2) {
+      // Walk up to find the direct child of the card that contains the title
+      let titleRow = h2;
+      while (titleRow.parentElement && titleRow.parentElement !== card) {
+        titleRow = titleRow.parentElement;
+      }
+      card.insertBefore(wrapper, titleRow.nextSibling);
     } else {
-      // Fallback: put at the very top of the card
-      const firstChild = card.firstElementChild;
-      if (firstChild) card.insertBefore(wrapper, firstChild.nextSibling);
-      else card.appendChild(wrapper);
+      // No title found — append to card
+      card.appendChild(wrapper);
     }
   });
 }
-
 // ─── Detail page ──────────────────────────────────────────────────────────────
 function processDetailPage() {
   // Only run on actual job detail pages (URL contains job UID like ~01234abc)
@@ -567,8 +593,9 @@ new MutationObserver(() => {
   // Route change
   if (location.href !== lastUrl) {
     lastUrl = location.href;
-    // Clear done flags so new page is scored fresh
+    // Clear both DOM flags and URL set so new page is scored fresh
     document.querySelectorAll('[data-ubi-done]').forEach(el => delete el.dataset.ubiDone);
+    processedJobUrls.clear();
     onRouteChange();
     return;
   }
