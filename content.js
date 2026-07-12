@@ -179,80 +179,299 @@ function extractFromText(text) {
 }
 
 // ─── Badge rendering ──────────────────────────────────────────────────────────
-function verdictText(score, grade) {
-  if (score >= 80) return 'Strong signals — apply with confidence.';
-  if (score >= 65) return 'Looks decent — worth applying.';
-  if (score >= 45) return 'Some red flags — read carefully first.';
-  if (score >= 25) return 'Multiple warnings — probably skip.';
-  return 'Too many red flags — save your connects.';
+
+// ─── Verdict copy ─────────────────────────────────────────────────────────────
+function verdictText(score) {
+  if (score >= 80) return '✅ Apply — strong signals across the board.';
+  if (score >= 65) return '👍 Worth applying — looks decent.';
+  if (score >= 45) return '⚠️ Risky — check the details first.';
+  if (score >= 25) return '🔴 Probably skip — multiple red flags.';
+  return '💀 Skip — save your connects for better jobs.';
+}
+
+// ─── Compact badge on job cards ───────────────────────────────────────────────
+let activeTooltip = null;
+
+function removeTooltip() {
+  if (activeTooltip) { activeTooltip.remove(); activeTooltip = null; }
 }
 
 function renderCompact(result) {
   const { score, grade, color, flags, green } = result;
 
-  // Badge pill — colour-coded background
-  const badgeBg = color + '22'; // translucent tint
-  const div = document.createElement('span');
-  div.className = 'ubi-badge';
-  div.setAttribute('data-ubi', '1');
-  div.setAttribute('tabindex', '0');
-  div.style.cssText = `background:${badgeBg};color:${color};border:1.5px solid ${color}44;`;
+  // Colour map for background tint
+  const bgMap = {
+    '#22c55e': 'rgba(34,197,94,0.12)',
+    '#84cc16': 'rgba(132,204,22,0.12)',
+    '#f59e0b': 'rgba(245,158,11,0.12)',
+    '#ef4444': 'rgba(239,68,68,0.12)',
+    '#7f1d1d': 'rgba(127,29,29,0.15)',
+  };
+  const bg = bgMap[color] || 'rgba(124,106,247,0.12)';
 
-  // Custom tooltip markup (no native title attr)
-  const greenRows = green.map(g => `<div class="ubi-tt-row green"><span class="ubi-tt-icon">✓</span><span>${g}</span></div>`).join('');
-  const flagRows  = flags.map(f => `<div class="ubi-tt-row amber"><span class="ubi-tt-icon">!</span><span>${f}</span></div>`).join('');
+  const badge = document.createElement('span');
+  badge.className = 'ubi-badge';
+  badge.setAttribute('data-ubi', '1');
+  badge.style.cssText = [
+    'display:inline-flex',
+    'align-items:center',
+    'gap:5px',
+    `background:${bg}`,
+    `border:1.5px solid ${color}`,
+    'border-radius:6px',
+    'padding:3px 9px',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'font-size:12px',
+    'font-weight:700',
+    `color:${color}`,
+    'cursor:pointer',
+    'user-select:none',
+    'white-space:nowrap',
+    'position:relative',
+    'vertical-align:middle',
+    'line-height:1.4',
+    'text-decoration:none',
+    'box-sizing:border-box',
+    'margin:4px 0',
+  ].join('!important;') + '!important';
 
-  div.innerHTML = `
-    <span class="ubi-badge-dot" style="background:${color}"></span>
-    <span class="ubi-badge-label">${score} · ${grade}</span>
-    <div class="ubi-tooltip">
-      <div class="ubi-tt-header">
-        <div class="ubi-tt-score" style="color:${color}">${score}</div>
-        <div>
-          <div class="ubi-tt-grade" style="color:${color}">${grade}</div>
-          <div class="ubi-tt-verdict">${verdictText(score, grade)}</div>
-        </div>
-      </div>
-      <div class="ubi-tt-signals">
-        ${greenRows}${flagRows}
-      </div>
-      <div class="ubi-tt-footer">⚡ Upwork Bid Intel · No account · All local</div>
-    </div>
-  `;
-  return div;
+  // Dot
+  const dot = document.createElement('span');
+  dot.style.cssText = [
+    'display:inline-block',
+    'width:7px', 'height:7px',
+    'border-radius:50%',
+    `background:${color}`,
+    'flex-shrink:0',
+  ].join('!important;') + '!important';
+
+  // Label
+  const lbl = document.createElement('span');
+  lbl.style.cssText = `font-size:12px!important;font-weight:700!important;color:${color}!important;font-family:inherit!important`;
+  lbl.textContent = score + ' · ' + grade;
+
+  badge.appendChild(dot);
+  badge.appendChild(lbl);
+
+  // ── Tooltip (appended to body, not inside card) ──
+  function showTooltip() {
+    removeTooltip();
+    const rect = badge.getBoundingClientRect();
+
+    const tip = document.createElement('div');
+    activeTooltip = tip;
+
+    // Outer shell
+    tip.style.cssText = [
+      'position:fixed',
+      `top:${rect.bottom + window.scrollY + 6}px`,
+      `left:${Math.max(8, rect.left + window.scrollX)}px`,
+      'z-index:2147483647',
+      'width:280px',
+      'background:#1a1a24',
+      'border:1px solid #3a3a4e',
+      'border-radius:10px',
+      'box-shadow:0 8px 32px rgba(0,0,0,0.55)',
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'font-size:12px',
+      'color:#e8e8f0',
+      'overflow:hidden',
+      'pointer-events:none',
+    ].join('!important;') + '!important';
+
+    // Header row: big score + grade + verdict
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex!important;align-items:center!important;gap:12px!important;padding:12px 14px!important;border-bottom:1px solid #2e2e3e!important;';
+
+    const scoreEl = document.createElement('div');
+    scoreEl.style.cssText = `font-size:30px!important;font-weight:900!important;line-height:1!important;color:${color}!important;flex-shrink:0!important;width:46px!important;text-align:center!important;`;
+    scoreEl.textContent = score;
+
+    const meta = document.createElement('div');
+    meta.style.cssText = 'flex:1!important;min-width:0!important;';
+
+    const gradePill = document.createElement('div');
+    gradePill.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:10px!important;font-weight:700!important;letter-spacing:0.6px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 7px!important;margin-bottom:4px!important;`;
+    gradePill.textContent = grade;
+
+    const verd = document.createElement('div');
+    verd.style.cssText = 'font-size:12px!important;color:#c0c0d8!important;line-height:1.4!important;';
+    verd.textContent = verdictText(score);
+
+    meta.appendChild(gradePill);
+    meta.appendChild(verd);
+    hdr.appendChild(scoreEl);
+    hdr.appendChild(meta);
+    tip.appendChild(hdr);
+
+    // Signals list
+    if (green.length || flags.length) {
+      const sig = document.createElement('div');
+      sig.style.cssText = 'padding:8px 14px 10px!important;display:flex!important;flex-direction:column!important;gap:5px!important;';
+
+      green.forEach(g => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex!important;align-items:flex-start!important;gap:7px!important;font-size:11px!important;color:#6ee7b7!important;line-height:1.4!important;';
+        row.innerHTML = '<span style="flex-shrink:0;font-size:12px">✓</span><span>' + g + '</span>';
+        sig.appendChild(row);
+      });
+
+      flags.forEach(f => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex!important;align-items:flex-start!important;gap:7px!important;font-size:11px!important;color:#fcd34d!important;line-height:1.4!important;';
+        row.innerHTML = '<span style="flex-shrink:0;font-size:12px">!</span><span>' + f + '</span>';
+        sig.appendChild(row);
+      });
+
+      tip.appendChild(sig);
+    }
+
+    // Footer
+    const foot = document.createElement('div');
+    foot.style.cssText = 'background:#111118!important;padding:5px 14px!important;font-size:10px!important;color:#5a5a72!important;border-top:1px solid #2e2e3e!important;';
+    foot.textContent = '⚡ Upwork Bid Intel · No account · All local';
+    tip.appendChild(foot);
+
+    document.body.appendChild(tip);
+
+    // Keep tooltip in viewport
+    requestAnimationFrame(() => {
+      const tr = tip.getBoundingClientRect();
+      if (tr.right > window.innerWidth - 8) {
+        tip.style.left = Math.max(8, window.innerWidth - tr.width - 8) + 'px';
+      }
+      if (tr.bottom > window.innerHeight - 8) {
+        tip.style.top = (rect.top + window.scrollY - tr.height - 6) + 'px';
+      }
+    });
+  }
+
+  badge.addEventListener('mouseenter', showTooltip);
+  badge.addEventListener('mouseleave', removeTooltip);
+  badge.addEventListener('focusin', showTooltip);
+  badge.addEventListener('focusout', removeTooltip);
+
+  return badge;
 }
 
+// ─── Detail page panel ────────────────────────────────────────────────────────
 function renderPanel(result) {
   const { score, grade, color, flags, green } = result;
-  const verdict = verdictText(score, grade);
 
-  // Chips for signals
-  const chips = [
-    ...green.map(g => `<span class="ubi-p-chip green">✓ ${g}</span>`),
-    ...flags.map(f => `<span class="ubi-p-chip amber">! ${f}</span>`),
-  ].join('');
+  const panel = document.createElement('div');
+  panel.className = 'ubi-panel';
+  panel.setAttribute('data-ubi', '1');
+  panel.style.cssText = [
+    'display:flex',
+    'align-items:flex-start',
+    'gap:0',
+    'background:#ffffff',
+    'border:1.5px solid #e2e2ee',
+    `border-left:4px solid ${color}`,
+    'border-radius:10px',
+    'padding:0',
+    'margin:14px 0',
+    'max-width:660px',
+    'box-shadow:0 1px 6px rgba(0,0,0,0.07)',
+    'overflow:hidden',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+    'font-size:13px',
+    'box-sizing:border-box',
+  ].join('!important;') + '!important';
 
-  // Light theme to blend with Upwork (which is white/grey)
-  const div = document.createElement('div');
-  div.className = 'ubi-panel';
-  div.setAttribute('data-ubi', '1');
-  div.style.borderLeftColor = color;
-  div.innerHTML = `
-    <div class="ubi-p-score">
-      <span class="ubi-p-num" style="color:${color}">${score}</span>
-      <span class="ubi-p-grade" style="background:${color}">
-        <span class="ubi-p-grade-inner">${grade}</span>
-      </span>
-    </div>
-    <div class="ubi-p-divider"></div>
-    <div class="ubi-p-right">
-      <div class="ubi-p-verdict">${verdict}</div>
-      <div class="ubi-p-signals">${chips}</div>
-      <div class="ubi-p-footer">⚡ Upwork Bid Intel &nbsp;·&nbsp; Scores update as you browse &nbsp;·&nbsp; All local, no account</div>
-    </div>
-  `;
-  return div;
+  // Left score block
+  const left = document.createElement('div');
+  left.style.cssText = [
+    'flex-shrink:0',
+    'text-align:center',
+    'padding:16px 18px',
+    'display:flex',
+    'flex-direction:column',
+    'align-items:center',
+    'justify-content:center',
+    'gap:6px',
+    'min-width:82px',
+    `background:rgba(${hexToRgb(color)},0.06)`,
+    `border-right:1px solid rgba(${hexToRgb(color)},0.15)`,
+  ].join('!important;') + '!important';
+
+  const numEl = document.createElement('div');
+  numEl.style.cssText = `font-size:34px!important;font-weight:900!important;line-height:1!important;color:${color}!important;letter-spacing:-1px!important;`;
+  numEl.textContent = score;
+
+  const pillEl = document.createElement('div');
+  pillEl.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:9px!important;font-weight:800!important;letter-spacing:0.8px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 7px!important;`;
+  pillEl.textContent = grade;
+
+  left.appendChild(numEl);
+  left.appendChild(pillEl);
+  panel.appendChild(left);
+
+  // Right content block
+  const right = document.createElement('div');
+  right.style.cssText = 'flex:1!important;padding:14px 16px!important;min-width:0!important;';
+
+  // Header
+  const headerRow = document.createElement('div');
+  headerRow.style.cssText = 'display:flex!important;align-items:center!important;gap:8px!important;margin-bottom:10px!important;';
+
+  const logoSpan = document.createElement('span');
+  logoSpan.style.cssText = 'font-size:13px!important;';
+  logoSpan.textContent = '⚡';
+
+  const titleSpan = document.createElement('span');
+  titleSpan.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#8080a0!important;letter-spacing:0.5px!important;text-transform:uppercase!important;';
+  titleSpan.textContent = 'Bid Intel';
+
+  headerRow.appendChild(logoSpan);
+  headerRow.appendChild(titleSpan);
+  right.appendChild(headerRow);
+
+  // Verdict sentence
+  const verdEl = document.createElement('div');
+  verdEl.style.cssText = `font-size:14px!important;font-weight:600!important;color:#1a1a2e!important;margin-bottom:10px!important;line-height:1.4!important;`;
+  verdEl.textContent = verdictText(score);
+  right.appendChild(verdEl);
+
+  // Signal chips
+  if (green.length || flags.length) {
+    const chipsWrap = document.createElement('div');
+    chipsWrap.style.cssText = 'display:flex!important;flex-wrap:wrap!important;gap:5px!important;margin-bottom:10px!important;';
+
+    green.forEach(g => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#f0fdf4!important;color:#166534!important;border:1px solid #bbf7d0!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
+      chip.textContent = '✓ ' + g;
+      chipsWrap.appendChild(chip);
+    });
+
+    flags.forEach(f => {
+      const chip = document.createElement('span');
+      chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
+      chip.textContent = '! ' + f;
+      chipsWrap.appendChild(chip);
+    });
+
+    right.appendChild(chipsWrap);
+  }
+
+  // Footer
+  const footEl = document.createElement('div');
+  footEl.style.cssText = 'font-size:10px!important;color:#a0a0b8!important;';
+  footEl.textContent = 'All local · No account · Scores update as you browse';
+  right.appendChild(footEl);
+
+  panel.appendChild(right);
+  return panel;
 }
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return r+','+g+','+b;
+}
+
 
 // ─── Card processing (search results) ────────────────────────────────────────
 function processCards() {
