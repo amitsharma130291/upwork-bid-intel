@@ -42,6 +42,15 @@ function scoreJob(d) {
     else if (d.clientHires >= 3)  addGreen(d.clientHires + ' hires');
   }
 
+  // ── HIRE RATE ──
+  if (d.hireRate !== null) {
+    if (d.hireRate === 0)        addFlag('0% hire rate — posted jobs but never hired ⚠️', 20);
+    else if (d.hireRate < 20)    addFlag(d.hireRate + '% hire rate — rarely hires', 10);
+    else if (d.hireRate < 40)    addFlag(d.hireRate + '% hire rate — below average', 5);
+    else if (d.hireRate >= 70)   addGreen(d.hireRate + '% hire rate — hires often ✓');
+    else if (d.hireRate >= 50)   addGreen(d.hireRate + '% hire rate');
+  }
+
   // ── PAYMENT VERIFICATION ──
   if (d.paymentVerified === false)     addFlag('Payment NOT verified ⚠️', 20);
   else if (d.paymentVerified === true) addGreen('Payment verified ✓');
@@ -190,6 +199,11 @@ function extractFromText(text, activityText) {
     if (m) clientHires = +m[1];
   }
 
+  // Hire rate percentage (how often this client actually hires after posting)
+  let hireRate = null;
+  const hrm = text.match(/(\d+)%\s*hire\s*rate/i);
+  if (hrm) hireRate = +hrm[1];
+
   // Client rating (1.0–5.9)
   // Client rating — Upwork shows it in several ways depending on context:
   // • Card list:   "Payment verified 5.0 $400K+ spent"  (bare decimal between signals)
@@ -212,7 +226,7 @@ function extractFromText(text, activityText) {
     if (rmSpend) clientRating = parseFloat(rmSpend[1]);
   }
 
-  return { paymentVerified, daysPosted, proposalsMid, hourlyMid, hourlyLow, hourlyHigh, avgHourlyPaid, fixedBudget, clientSpend, clientHires, clientRating };
+  return { paymentVerified, daysPosted, proposalsMid, hourlyMid, hourlyLow, hourlyHigh, avgHourlyPaid, fixedBudget, clientSpend, clientHires, clientRating, hireRate };
 }
 
 // ─── Badge (compact, inline) ──────────────────────────────────────────────────
