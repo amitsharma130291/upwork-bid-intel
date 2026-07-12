@@ -258,10 +258,18 @@ function renderBadge(result) {
     }
 
     const foot = document.createElement('div');
-    foot.style.cssText = 'background:#111118!important;padding:6px 14px!important;font-size:10px!important;color:#5a5a72!important;border-top:1px solid #2e2e3e!important;line-height:1.5!important;';
-    foot.innerHTML = '⚡ Upwork Bid Intel · All local · No account<br>' +
-      '<span style="color:#4a4a62">Score based on visible data — may change once you open the job</span>';
+    foot.style.cssText = 'background:#111118!important;padding:5px 14px 4px!important;font-size:10px!important;color:#5a5a72!important;border-top:1px solid #2e2e3e!important;';
+    foot.textContent = '⚡ Upwork Bid Intel · All local · No account';
     tip.appendChild(foot);
+
+    // Highlighted note — must be impossible to miss
+    const note = document.createElement('div');
+    note.style.cssText = 'background:#2a2010!important;border-top:1px solid #f59e0b!important;' +
+      'padding:6px 14px!important;font-size:11px!important;font-weight:600!important;' +
+      'color:#fbbf24!important;line-height:1.4!important;display:flex!important;gap:6px!important;align-items:flex-start!important;';
+    note.innerHTML = '<span style="flex-shrink:0;font-size:13px">⚠︎</span>' +
+      '<span>Score is estimated — open the job for the full score</span>';
+    tip.appendChild(note);
     document.body.appendChild(tip);
 
     // Position: fixed viewport coords, no scrollY
