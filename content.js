@@ -78,7 +78,10 @@ function scoreJob(d) {
     else                          addGreen('Pays ' + rateLabel);
     // Note when avg paid is lower than posted range
     if (d.avgHourlyPaid !== null && d.hourlyMid !== null && d.avgHourlyPaid < d.hourlyMid - 5) {
-      addFlag('Posted $' + d.hourlyMid + '/hr but avg paid is only $' + d.avgHourlyPaid, 0);
+      const postedRange = (d.hourlyLow && d.hourlyHigh)
+        ? '$' + d.hourlyLow + '–$' + d.hourlyHigh
+        : '$' + d.hourlyMid;
+      addFlag('Posted ' + postedRange + '/hr but pays $' + d.avgHourlyPaid + '/hr avg', 0);
     }
   }
 
@@ -146,9 +149,10 @@ function extractFromText(text) {
   const hrA = text.match(/hourly[:\s]*\$([\d.]+)\s*[-\u2013]\s*\$?([\d.]+)/i);
   const hrB = text.match(/\$([\d.]+)\s*[-\u2013]\s*\$?([\d.]+)\s*hourly/i);
   const hsA = text.match(/hourly[:\s]*\$([\d.]+)/i);
-  if (hrA) hourlyMid = Math.round((+hrA[1] + +hrA[2]) / 2);
-  else if (hrB) hourlyMid = Math.round((+hrB[1] + +hrB[2]) / 2);
-  else if (hsA) hourlyMid = +hsA[1];
+  let hourlyLow = null, hourlyHigh = null;
+  if (hrA) { hourlyLow = +hrA[1]; hourlyHigh = +hrA[2]; hourlyMid = Math.round((hourlyLow + hourlyHigh) / 2); }
+  else if (hrB) { hourlyLow = +hrB[1]; hourlyHigh = +hrB[2]; hourlyMid = Math.round((hourlyLow + hourlyHigh) / 2); }
+  else if (hsA) { hourlyMid = +hsA[1]; }
 
   // Client's actual avg hourly rate paid (more honest than posted range)
   let avgHourlyPaid = null;
@@ -200,7 +204,7 @@ function extractFromText(text) {
     if (rmSpend) clientRating = parseFloat(rmSpend[1]);
   }
 
-  return { paymentVerified, daysPosted, proposalsMid, hourlyMid, avgHourlyPaid, fixedBudget, clientSpend, clientHires, clientRating };
+  return { paymentVerified, daysPosted, proposalsMid, hourlyMid, hourlyLow, hourlyHigh, avgHourlyPaid, fixedBudget, clientSpend, clientHires, clientRating };
 }
 
 // ─── Badge (compact, inline) ──────────────────────────────────────────────────
