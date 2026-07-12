@@ -1,349 +1,319 @@
 /**
- * Upwork Bid Intel — Content Script
- * Analyses every job card and job detail page on Upwork.
- * Injects a score badge directly into the UI. No account needed.
+ * Upwork Bid Intel v1.1 — Content Script
+ * Fixed: regex patterns match Upwork's actual DOM text
+ * Fixed: duplicate badge prevention via data attribute
  */
 
 // ─── Scoring engine ───────────────────────────────────────────────────────────
-
 function scoreJob(data) {
   let score = 100;
   const flags = [];
   const green = [];
 
-  // ── CLIENT SIGNALS ──
-  if (data.clientRating !== null) {
-    if (data.clientRating >= 4.7) green.push('Top-rated client ⭐');
-    else if (data.clientRating < 3.5) { score -= 25; flags.push('Low client rating (' + data.clientRating + ')'); }
-    else if (data.clientRating < 4.0) { score -= 10; flags.push('Below-avg client rating'); }
+  // ── CLIENT RATING ──
+  if (data.clientRating !== null && data.clientRating > 0) {
+    if (data.clientRating >= 4.7)      green.push('Top-rated client (' + data.clientRating + '⭐)');
+    else if (data.clientRating >= 4.0) green.push('Good client rating (' + data.clientRating + ')');
+    else if (data.clientRating < 3.5)  { score -= 25; flags.push('Low client rating: ' + data.clientRating); }
+    else                               { score -= 10; flags.push('Below-avg client rating: ' + data.clientRating); }
   } else {
     score -= 20;
     flags.push('No client rating — never hired on Upwork');
   }
 
+  // ── CLIENT HIRES ──
   if (data.clientHires !== null) {
-    if (data.clientHires === 0) { score -= 15; flags.push('Client has 0 hires'); }
-    else if (data.clientHires >= 10) green.push(data.clientHires + ' hires on Upwork');
-    else if (data.clientHires >= 3) green.push(data.clientHires + ' hires');
+    if (data.clientHires === 0)       { score -= 15; flags.push('Client has 0 hires ever'); }
+    else if (data.clientHires >= 10)  green.push(data.clientHires + ' total hires');
+    else if (data.clientHires >= 3)   green.push(data.clientHires + ' hires');
   }
 
+  // ── CLIENT SPEND ──
   if (data.clientSpend !== null) {
-    if (data.clientSpend >= 10000) green.push('$' + (data.clientSpend/1000).toFixed(0) + 'k+ spent');
-    else if (data.clientSpend >= 1000) green.push('$' + (data.clientSpend/1000).toFixed(1) + 'k spent');
-    else if (data.clientSpend < 100) { score -= 10; flags.push('Client spent <$100 total'); }
+    if (data.clientSpend === 0)           { score -= 10; flags.push('$0 spent — brand new account'); }
+    else if (data.clientSpend >= 10000)   green.push('$' + (data.clientSpend/1000).toFixed(0) + 'k+ spent on Upwork');
+    else if (data.clientSpend >= 1000)    green.push('$' + (data.clientSpend/1000).toFixed(1) + 'k spent');
+    else if (data.clientSpend < 100)      { score -= 5; flags.push('Client spent <$100 total'); }
   }
 
-  if (data.paymentVerified === false) { score -= 15; flags.push('Payment NOT verified ⚠️'); }
+  // ── PAYMENT VERIFICATION ──
+  if (data.paymentVerified === false)     { score -= 20; flags.push('Payment NOT verified ⚠️'); }
   else if (data.paymentVerified === true) green.push('Payment verified ✓');
 
   // ── JOB AGE ──
   if (data.daysPosted !== null) {
-    if (data.daysPosted > 30) { score -= 25; flags.push('Posted ' + data.daysPosted + ' days ago — likely stale'); }
-    else if (data.daysPosted > 14) { score -= 10; flags.push('Posted ' + data.daysPosted + ' days ago'); }
-    else if (data.daysPosted <= 2) green.push('Fresh listing — ' + data.daysPosted + 'd ago');
-    else green.push('Posted ' + data.daysPosted + 'd ago');
+    if (data.daysPosted > 60)      { score -= 30; flags.push('Posted ' + data.daysPosted + ' days ago — very stale'); }
+    else if (data.daysPosted > 30) { score -= 20; flags.push('Posted ' + data.daysPosted + ' days ago — likely stale'); }
+    else if (data.daysPosted > 14) { score -= 8;  flags.push('Posted ' + data.daysPosted + ' days ago'); }
+    else if (data.daysPosted <= 1) green.push('Posted today — very fresh');
+    else if (data.daysPosted <= 3) green.push('Posted ' + data.daysPosted + ' days ago — fresh');
   }
 
   // ── PROPOSALS (competition) ──
-  if (data.proposals !== null) {
-    if (data.proposals >= 50) { score -= 20; flags.push('50+ proposals — very crowded'); }
-    else if (data.proposals >= 20) { score -= 8; flags.push(data.proposals + ' proposals — competitive'); }
-    else if (data.proposals <= 5) green.push('Only ' + data.proposals + ' proposals — low competition');
-    else green.push(data.proposals + ' proposals');
+  if (data.proposalsMid !== null) {
+    if (data.proposalsMid >= 50)      { score -= 20; flags.push('50+ proposals — very crowded'); }
+    else if (data.proposalsMid >= 25) { score -= 10; flags.push(data.proposalsMid + '± proposals — competitive'); }
+    else if (data.proposalsMid <= 5)  green.push('Only ~' + data.proposalsMid + ' proposals — low competition 🎯');
+    else                              green.push('~' + data.proposalsMid + ' proposals');
   }
 
-  // ── BUDGET SANITY ──
-  if (data.budgetHourly !== null) {
-    if (data.budgetHourly < 10) { score -= 25; flags.push('Rate under $10/hr — race to bottom'); }
-    else if (data.budgetHourly < 20) { score -= 10; flags.push('Low rate: $' + data.budgetHourly + '/hr'); }
-    else if (data.budgetHourly >= 50) green.push('Good rate: $' + data.budgetHourly + '/hr');
-    else green.push('$' + data.budgetHourly + '/hr rate');
+  // ── BUDGET ──
+  if (data.hourlyMid !== null) {
+    if (data.hourlyMid < 10)      { score -= 25; flags.push('Rate $' + data.hourlyMid + '/hr — race to bottom'); }
+    else if (data.hourlyMid < 20) { score -= 10; flags.push('Low rate: ~$' + data.hourlyMid + '/hr'); }
+    else if (data.hourlyMid >= 50) green.push('Strong rate: ~$' + data.hourlyMid + '/hr 💰');
+    else                           green.push('Rate: ~$' + data.hourlyMid + '/hr');
   }
 
-  if (data.budgetFixed !== null) {
-    if (data.budgetFixed < 50) { score -= 20; flags.push('Fixed budget under $50'); }
-    else if (data.budgetFixed < 200) { score -= 5; flags.push('Low fixed budget: $' + data.budgetFixed); }
-    else if (data.budgetFixed >= 500) green.push('Solid budget: $' + data.budgetFixed);
+  if (data.fixedBudget !== null) {
+    if (data.fixedBudget < 50)       { score -= 20; flags.push('Fixed budget <$50 — not worth it'); }
+    else if (data.fixedBudget < 200) { score -= 5;  flags.push('Low fixed budget: $' + data.fixedBudget); }
+    else if (data.fixedBudget >= 500) green.push('Good budget: $' + data.fixedBudget + ' 💰');
+    else                              green.push('Budget: $' + data.fixedBudget);
   }
 
   // ── DESCRIPTION QUALITY ──
-  if (data.descriptionLength !== null) {
-    if (data.descriptionLength < 100) { score -= 20; flags.push('Vague description — low effort client'); }
-    else if (data.descriptionLength >= 500) green.push('Detailed description (' + data.descriptionLength + ' chars)');
-  }
-
-  if (data.hasAttachments) green.push('Has attachments / files');
-
-  // ── INTERVIEW RATE ──
-  if (data.interviewRate !== null) {
-    if (data.interviewRate >= 80) green.push('High interview rate: ' + data.interviewRate + '%');
-    else if (data.interviewRate < 20) { score -= 10; flags.push('Low interview rate: ' + data.interviewRate + '%'); }
-  }
-
-  // ── HIRE RATE ──
-  if (data.hireRate !== null) {
-    if (data.hireRate >= 70) green.push('Client hires ' + data.hireRate + '% of proposals');
-    else if (data.hireRate < 20) { score -= 10; flags.push('Low hire rate: ' + data.hireRate + '%'); }
+  if (data.descLength !== null) {
+    if (data.descLength < 80)       { score -= 20; flags.push('Vague job description — lazy client'); }
+    else if (data.descLength >= 400) green.push('Detailed description');
   }
 
   score = Math.max(0, Math.min(100, score));
 
   let grade, color, emoji;
   if (score >= 80)      { grade = 'Excellent'; color = '#22c55e'; emoji = '🟢'; }
-  else if (score >= 65) { grade = 'Good';      color = '#86efac'; emoji = '🟡'; }
-  else if (score >= 45) { grade = 'Risky';     color = '#fbbf24'; emoji = '🟠'; }
-  else if (score >= 25) { grade = 'Poor';      color = '#f87171'; emoji = '🔴'; }
-  else                  { grade = 'Skip';      color = '#991b1b'; emoji = '💀'; }
+  else if (score >= 65) { grade = 'Good';      color = '#84cc16'; emoji = '🟡'; }
+  else if (score >= 45) { grade = 'Risky';     color = '#f59e0b'; emoji = '🟠'; }
+  else if (score >= 25) { grade = 'Poor';      color = '#ef4444'; emoji = '🔴'; }
+  else                  { grade = 'Skip';      color = '#7f1d1d'; emoji = '💀'; }
 
   return { score, grade, color, emoji, flags, green };
 }
 
-// ─── Data extraction helpers ──────────────────────────────────────────────────
+// ─── Data extraction — matched to Upwork's actual text patterns ───────────────
+function extractFromText(text) {
+  // ── PAYMENT VERIFICATION ──
+  // "Payment verified" vs "Payment unverified"
+  const paymentVerified = /payment\s+verified/i.test(text) && !/payment\s+un/i.test(text);
 
-function getNum(el, selector, attr) {
-  const node = el ? el.querySelector(selector) : document.querySelector(selector);
-  if (!node) return null;
-  const text = attr ? node.getAttribute(attr) : node.textContent;
-  if (!text) return null;
-  const n = parseFloat(text.replace(/[^0-9.]/g, ''));
-  return isNaN(n) ? null : n;
-}
+  // ── JOB AGE ──
+  // "Posted 2 weeks ago · Proposals: 5 to 10"
+  // "Posted 2 months ago"
+  // "Posted 3 days ago"
+  let daysPosted = null;
+  const hoursM  = text.match(/posted\s+(\d+)\s+hours?\s+ago/i);
+  const daysM   = text.match(/posted\s+(\d+)\s+days?\s+ago/i);
+  const weeksM  = text.match(/posted\s+(\d+)\s+weeks?\s+ago/i);
+  const monthsM = text.match(/posted\s+(\d+)\s+months?\s+ago/i);
+  if      (hoursM)  daysPosted = 0;
+  else if (daysM)   daysPosted = parseInt(daysM[1]);
+  else if (weeksM)  daysPosted = parseInt(weeksM[1]) * 7;
+  else if (monthsM) daysPosted = parseInt(monthsM[1]) * 30;
 
-function getText(el, selector) {
-  const node = el ? el.querySelector(selector) : document.querySelector(selector);
-  return node ? node.textContent.trim() : null;
-}
+  // ── PROPOSALS ──
+  // "Proposals: 5 to 10"  "Proposals: 10 to 15"  "Proposals: Less than 5"
+  let proposalsMid = null;
+  const propRange  = text.match(/proposals?[:\s]+(\d+)\s+to\s+(\d+)/i);
+  const propLess   = text.match(/proposals?[:\s]+less\s+than\s+(\d+)/i);
+  const propSingle = text.match(/proposals?[:\s]+(\d+)/i);
+  if (propRange)       proposalsMid = Math.round((parseInt(propRange[1]) + parseInt(propRange[2])) / 2);
+  else if (propLess)   proposalsMid = Math.round(parseInt(propLess[1]) / 2);
+  else if (propSingle) proposalsMid = parseInt(propSingle[1]);
 
-function extractJobData(container) {
-  const fullText = container ? container.textContent : document.body.textContent;
+  // ── HOURLY RATE ──
+  // "Hourly: $15.00 - $40.00 - Intermediate"
+  // "Hourly: $25.00/hr"
+  let hourlyMid = null;
+  const hourlyRange  = text.match(/hourly[:\s]+\$([0-9,.]+)\s*[-–]\s*\$([0-9,.]+)/i);
+  const hourlySingle = text.match(/hourly[:\s]+\$([0-9,.]+)/i);
+  if (hourlyRange)       hourlyMid = Math.round((parseFloat(hourlyRange[1].replace(/,/g,'')) + parseFloat(hourlyRange[2].replace(/,/g,''))) / 2);
+  else if (hourlySingle) hourlyMid = parseFloat(hourlySingle[1].replace(/,/g,''));
 
-  // Client rating
-  let clientRating = null;
-  const ratingMatch = fullText.match(/(\d+\.\d+)\s*(out of|\/)\s*5/i) ||
-                      fullText.match(/client rating[:\s]*(\d+\.\d+)/i);
-  if (ratingMatch) clientRating = parseFloat(ratingMatch[1]);
+  // ── FIXED BUDGET ──
+  // "Est. budget: $500.00"  "Fixed price ... $500"
+  let fixedBudget = null;
+  const fixedM = text.match(/(?:est\.?\s*budget|fixed)[:\s]*\$([0-9,]+(?:\.\d+)?)/i);
+  if (fixedM && !hourlyMid) fixedBudget = parseFloat(fixedM[1].replace(/,/g,''));
 
-  // Rating from stars element
-  const ratingEl = container?.querySelector('[data-test="rating"],.rating-value,[class*="rating"]');
-  if (ratingEl && !clientRating) {
-    const r = parseFloat(ratingEl.textContent.replace(/[^0-9.]/g, ''));
-    if (!isNaN(r) && r <= 5) clientRating = r;
-  }
-
-  // Hires
+  // ── CLIENT HIRES (the number before "$X spent") ──
+  // Upwork shows: "★★★★★ 0  $0 spent" — the 0 is total jobs posted/hires
+  // Also: "123 hires"  or "No hires"
   let clientHires = null;
-  const hiresMatch = fullText.match(/(\d+)\s*(job|hire)s?\s*(posted|completed|hired)/i) ||
-                     fullText.match(/total\s*(jobs|hires)[:\s]*(\d+)/i) ||
-                     fullText.match(/(\d+)\s*hires/i);
-  if (hiresMatch) clientHires = parseInt(hiresMatch[1] || hiresMatch[2]);
+  const noHiresM  = /no\s+hires/i.test(text);
+  const hiresM    = text.match(/(\d+)\s+hires/i);
+  const jobsM     = text.match(/(\d+)\s+jobs?\s+posted/i);
+  // The standalone zero before "$X spent" pattern
+  const zeroBeforeSpend = text.match(/\b(0)\s+\$\d+\s+spent/i);
+  if      (noHiresM)      clientHires = 0;
+  else if (hiresM)        clientHires = parseInt(hiresM[1]);
+  else if (jobsM)         clientHires = parseInt(jobsM[1]);
+  else if (zeroBeforeSpend) clientHires = 0;
 
-  // Spend
+  // ── CLIENT SPEND ──
+  // "$0 spent"  "$1.2k spent"  "$50K+ spent"
   let clientSpend = null;
-  const spendMatch = fullText.match(/\$([0-9,]+)k?\s*(total\s*)?spent/i) ||
-                     fullText.match(/total\s*spent[:\s]*\$([0-9,.]+)/i);
-  if (spendMatch) {
-    let v = parseFloat(spendMatch[1].replace(/,/g,''));
-    if (fullText.includes('k')) v *= 1000;
+  const spentM = text.match(/\$([0-9,.]+)(k\+?)?\s+spent/i);
+  if (spentM) {
+    let v = parseFloat(spentM[1].replace(/,/g,''));
+    if (spentM[2] && spentM[2].toLowerCase().includes('k')) v *= 1000;
     clientSpend = v;
   }
 
-  // Payment verified
-  const paymentVerified = fullText.includes('Payment verified') || fullText.includes('payment-verified');
+  // ── CLIENT RATING ──
+  // Upwork shows numeric rating like "4.9" near stars, or just "0" for no rating
+  let clientRating = null;
+  const ratingM = text.match(/\b([4-5]\.\d)\b/);  // 4.x or 5.x — likely a rating
+  if (ratingM) clientRating = parseFloat(ratingM[1]);
 
-  // Days posted
-  let daysPosted = null;
-  const daysMatch = fullText.match(/(\d+)\s*days?\s*ago/i);
-  const hoursMatch = fullText.match(/(\d+)\s*hours?\s*ago/i);
-  const weeksMatch = fullText.match(/(\d+)\s*weeks?\s*ago/i);
-  const monthsMatch = fullText.match(/(\d+)\s*months?\s*ago/i);
-  if (hoursMatch) daysPosted = 0;
-  else if (daysMatch) daysPosted = parseInt(daysMatch[1]);
-  else if (weeksMatch) daysPosted = parseInt(weeksMatch[1]) * 7;
-  else if (monthsMatch) daysPosted = parseInt(monthsMatch[1]) * 30;
-
-  // Proposals
-  let proposals = null;
-  const propMatch = fullText.match(/(\d+)\s*(to\s*\d+\s*)?proposal/i);
-  if (propMatch) proposals = parseInt(propMatch[1]);
-  const propRangeMatch = fullText.match(/(\d+)\s*[-–]\s*(\d+)\s*proposal/i);
-  if (propRangeMatch) proposals = Math.round((parseInt(propRangeMatch[1]) + parseInt(propRangeMatch[2])) / 2);
-
-  // Budget hourly
-  let budgetHourly = null;
-  const hourlyMatch = fullText.match(/\$(\d+(?:\.\d+)?)\s*[-–\/]\s*\$(\d+(?:\.\d+)?)\s*\/?hr/i) ||
-                      fullText.match(/\$(\d+(?:\.\d+)?)\s*\/\s*hr/i);
-  if (hourlyMatch) {
-    if (hourlyMatch[2]) budgetHourly = (parseFloat(hourlyMatch[1]) + parseFloat(hourlyMatch[2])) / 2;
-    else budgetHourly = parseFloat(hourlyMatch[1]);
-  }
-
-  // Budget fixed
-  let budgetFixed = null;
-  const fixedMatch = fullText.match(/fixed[^$]*\$([0-9,]+)/i) ||
-                     fullText.match(/budget[:\s]*\$([0-9,]+)/i);
-  if (fixedMatch && !budgetHourly) budgetFixed = parseFloat(fixedMatch[1].replace(/,/g,''));
-
-  // Description length
-  const descEl = container?.querySelector('[class*="description"],[class*="desc"],article') ||
-                 document.querySelector('[class*="job-description"],[class*="description"]');
-  const descriptionLength = descEl ? descEl.textContent.trim().length : fullText.length > 200 ? fullText.trim().length : null;
-
-  const hasAttachments = fullText.includes('attachment') || fullText.includes('Attachment');
-
-  // Interview rate
-  let interviewRate = null;
-  const intMatch = fullText.match(/(\d+)%?\s*interview/i);
-  if (intMatch) interviewRate = parseInt(intMatch[1]);
-
-  // Hire rate
-  let hireRate = null;
-  const hireMatch = fullText.match(/(\d+)%?\s*hire\s*rate/i);
-  if (hireMatch) hireRate = parseInt(hireMatch[1]);
+  // ── DESCRIPTION LENGTH ──
+  // Use the whole card text minus noise as a rough quality proxy
+  const cleanText = text.replace(/\s+/g,' ').trim();
+  const descLength = cleanText.length > 50 ? cleanText.length : null;
 
   return {
-    clientRating, clientHires, clientSpend, paymentVerified,
-    daysPosted, proposals, budgetHourly, budgetFixed,
-    descriptionLength, hasAttachments, interviewRate, hireRate
+    paymentVerified, daysPosted, proposalsMid,
+    hourlyMid, fixedBudget, clientHires, clientSpend,
+    clientRating, descLength
   };
 }
 
-// ─── Badge injection ──────────────────────────────────────────────────────────
+// ─── Badge rendering ──────────────────────────────────────────────────────────
+function renderCompact(result) {
+  const { score, grade, color } = result;
+  const div = document.createElement('span');
+  div.className = 'ubi-badge';
+  div.setAttribute('data-ubi', '1');
+  div.innerHTML =
+    `<span class="ubi-dot" style="background:${color}"></span>` +
+    `<span class="ubi-num">${score}</span>` +
+    `<span class="ubi-lbl">${grade}</span>`;
 
-const BADGE_CLASS = 'ubi-badge';
-const injected = new WeakSet();
+  // Full tooltip on hover
+  const ttLines = [];
+  if (result.green.length) ttLines.push('✅ ' + result.green.join('\n✅ '));
+  if (result.flags.length) ttLines.push('⚠️ ' + result.flags.join('\n⚠️ '));
+  div.title = `Bid Intel: ${grade} (${score}/100)\n\n${ttLines.join('\n\n')}`;
+  return div;
+}
 
-function createBadge(result, compact = false) {
+function renderPanel(result) {
   const { score, grade, color, emoji, flags, green } = result;
-
-  if (compact) {
-    const badge = document.createElement('div');
-    badge.className = BADGE_CLASS + ' ubi-compact';
-    badge.setAttribute('title', `Bid Intel: ${grade} (${score}/100)\n\n✅ ${green.join('\n✅ ')}${flags.length ? '\n\n⚠️ ' + flags.join('\n⚠️ ') : ''}`);
-    badge.innerHTML = `<span class="ubi-score-dot" style="background:${color}"></span><span class="ubi-score-num">${score}</span><span class="ubi-grade-text">${grade}</span>`;
-    return badge;
-  }
-
-  const panel = document.createElement('div');
-  panel.className = BADGE_CLASS + ' ubi-panel';
-  panel.innerHTML = `
-    <div class="ubi-header">
-      <span class="ubi-logo">⚡</span>
-      <span class="ubi-title">Bid Intel</span>
-      <div class="ubi-score-ring" style="--score-color:${color}">
-        <span class="ubi-score-big">${score}</span>
-        <span class="ubi-score-label">${emoji} ${grade}</span>
+  const div = document.createElement('div');
+  div.className = 'ubi-panel';
+  div.setAttribute('data-ubi', '1');
+  div.innerHTML = `
+    <div class="ubi-ph">
+      <span class="ubi-plogo">⚡</span>
+      <span class="ubi-ptitle">Bid Intel</span>
+      <div class="ubi-pring" style="border-color:${color}">
+        <span class="ubi-pbig" style="color:${color}">${score}</span>
+        <span class="ubi-psub">${emoji} ${grade}</span>
       </div>
     </div>
-    ${green.length ? `<div class="ubi-greens">${green.map(g=>`<div class="ubi-green-item">✅ ${g}</div>`).join('')}</div>` : ''}
-    ${flags.length ? `<div class="ubi-flags">${flags.map(f=>`<div class="ubi-flag-item">⚠️ ${f}</div>`).join('')}</div>` : ''}
-    <div class="ubi-footer">No account needed · All local · <a href="#" class="ubi-link">How scores work</a></div>
+    ${green.length ? `<div class="ubi-pg">${green.map(g=>`<div class="ubi-gi">✅ ${g}</div>`).join('')}</div>` : ''}
+    ${flags.length ? `<div class="ubi-pf">${flags.map(f=>`<div class="ubi-fi">⚠️ ${f}</div>`).join('')}</div>` : ''}
+    <div class="ubi-pfoot">No account · All local · Upwork Bid Intel</div>
   `;
-
-  panel.querySelector('.ubi-link')?.addEventListener('click', e => {
-    e.preventDefault();
-    alert('Upwork Bid Intel scores jobs on:\n\n• Client rating & hire history\n• Payment verification\n• Job age (staleness)\n• Proposal count (competition)\n• Budget vs market rate\n• Description quality\n• Client hire rate\n\nScore 80+: Apply with confidence\nScore 60-79: Apply with caution\nScore 40-59: Risky — check carefully\nScore <40: Not worth your connects');
-  });
-
-  return panel;
+  return div;
 }
 
-// ─── Job detail page ──────────────────────────────────────────────────────────
-
-function processDetailPage() {
-  // Don't double-inject
-  if (document.querySelector('.ubi-panel')) return;
-
-  const data = extractJobData(null);
-  const result = scoreJob(data);
-
-  // Find the best insertion point
-  const insertAfter = document.querySelector(
-    '[data-test="job-details-header"],' +
-    '[class*="job-title"],' +
-    'h1[class*="title"],' +
-    '[class*="JobDetailHeader"],' +
-    '.up-card-section'
-  );
-
-  const panel = createBadge(result, false);
-
-  if (insertAfter) {
-    insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
-  } else {
-    const main = document.querySelector('main,[role="main"]');
-    if (main) main.prepend(panel);
-  }
-}
-
-// ─── Job card list (search results) ──────────────────────────────────────────
-
-function processJobCards() {
-  const cards = document.querySelectorAll(
-    '[data-test="job-tile"],[class*="job-tile"],[class*="JobTile"],' +
-    'section[class*="job"],.up-card-section[data-job-uid],' +
-    'article[class*="job"]'
-  );
+// ─── Card processing (search results) ────────────────────────────────────────
+function processCards() {
+  // Upwork job cards — various selectors across Upwork's changing markup
+  const cards = document.querySelectorAll([
+    '[data-test="job-tile"]',
+    '[class*="JobTile"]',
+    '[class*="job-tile"]',
+    'article[class*="job"]',
+    'section[class*="job"]',
+  ].join(','));
 
   cards.forEach(card => {
-    if (injected.has(card)) return;
-    if (card.querySelector('.' + BADGE_CLASS)) return;
+    // Skip if already scored
+    if (card.dataset.ubiDone) return;
+    card.dataset.ubiDone = '1';
 
-    injected.add(card);
-    const data = extractJobData(card);
+    const text = card.textContent || '';
+    const data = extractFromText(text);
     const result = scoreJob(data);
+    const badge = renderCompact(result);
 
-    // Find title area to insert after
-    const titleEl = card.querySelector('h2,h3,[class*="title"],[class*="heading"]');
-    const compact = createBadge(result, true);
-
+    // Insert after title
+    const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="heading"], a[href*="/jobs/"]');
     if (titleEl) {
-      titleEl.parentNode.insertBefore(compact, titleEl.nextSibling);
+      // Insert as inline element right after the title
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'margin:4px 0 6px;';
+      wrapper.appendChild(badge);
+      titleEl.parentNode.insertBefore(wrapper, titleEl.nextSibling);
     } else {
-      card.prepend(compact);
+      card.prepend(badge);
     }
   });
 }
 
-// ─── Observer for SPA navigation ─────────────────────────────────────────────
+// ─── Detail page ──────────────────────────────────────────────────────────────
+function processDetailPage() {
+  if (document.querySelector('.ubi-panel')) return;
 
-function detectPage() {
-  const url = window.location.href;
-  if (url.includes('/jobs/') && url.match(/~[a-z0-9]+/)) {
-    // Detail page
-    setTimeout(processDetailPage, 800);
-  } else if (url.includes('/nx/jobs/') || url.includes('/search/jobs') || url.includes('/freelancers')) {
-    // Search results
-    setTimeout(processJobCards, 600);
+  const text = document.body.textContent || '';
+  const data = extractFromText(text);
+  const result = scoreJob(data);
+  const panel = renderPanel(result);
+
+  // Try to insert after the job title / header
+  const target = document.querySelector([
+    '[data-test="job-details-header"]',
+    'h1',
+    '[class*="JobTitle"]',
+    '[class*="job-title"]',
+  ].join(','));
+
+  if (target?.parentNode) {
+    target.parentNode.insertBefore(panel, target.nextSibling);
   } else {
-    // Any page — try cards
-    setTimeout(processJobCards, 600);
+    const main = document.querySelector('main, [role="main"]');
+    if (main) main.prepend(panel);
   }
 }
 
-// Watch for SPA route changes
+// ─── Route detection ──────────────────────────────────────────────────────────
+function onRouteChange() {
+  const url = location.href;
+  if (url.match(/\/jobs\/.*~[0-9a-f]+/i)) {
+    setTimeout(processDetailPage, 900);
+  } else {
+    setTimeout(processCards, 700);
+  }
+}
+
+// ─── MutationObserver (SPA) ───────────────────────────────────────────────────
 let lastUrl = location.href;
-const observer = new MutationObserver(() => {
+let throttleTimer = null;
+
+new MutationObserver(() => {
+  // Route change
   if (location.href !== lastUrl) {
     lastUrl = location.href;
-    detectPage();
+    // Clear done flags so new page is scored fresh
+    document.querySelectorAll('[data-ubi-done]').forEach(el => delete el.dataset.ubiDone);
+    onRouteChange();
+    return;
   }
-  // Also pick up cards injected dynamically
-  processJobCards();
-});
-
-observer.observe(document.body, { childList: true, subtree: true });
+  // Throttle card processing (new cards injected by Upwork's infinite scroll)
+  clearTimeout(throttleTimer);
+  throttleTimer = setTimeout(processCards, 400);
+}).observe(document.body, { childList: true, subtree: true });
 
 // Initial run
-detectPage();
+onRouteChange();
 
-// Message from popup
+// Popup message
 chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === 'GET_PAGE_DATA') {
-    const url = window.location.href;
-    const isDetail = url.includes('/jobs/') && url.match(/~[a-z0-9]+/);
-    const data = extractJobData(null);
+    const data = extractFromText(document.body.textContent);
     const result = scoreJob(data);
-    sendResponse({ url, isDetail, data, result });
+    sendResponse({ result, isDetail: !!location.href.match(/\/jobs\/.*~[0-9a-f]+/i) });
   }
   return true;
 });
