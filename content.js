@@ -134,11 +134,14 @@ function extractFromText(text) {
 
   // Hourly rate
   let hourlyMid = null;
-  // Require $ before digits to avoid matching "Hourly  1 open job" as $1/hr
-  const hr = text.match(/hourly[:\s]*\$([\d.]+)\s*[-–]\s*\$?([\d.]+)/i);
-  const hs = text.match(/hourly[:\s]*\$([\d.]+)/i);
-  if (hr) hourlyMid = Math.round((+hr[1] + +hr[2]) / 2);
-  else if (hs) hourlyMid = +hs[1];
+  // Match both "Hourly $N-$M" (card list) and "$N.00-$M.00 Hourly" (detail page)
+  // Require $ before digits to avoid "Hourly 1 open job" false match
+  const hrA = text.match(/hourly[:\s]*\$([\d.]+)\s*[-\u2013]\s*\$?([\d.]+)/i);
+  const hrB = text.match(/\$([\d.]+)\s*[-\u2013]\s*\$?([\d.]+)\s*hourly/i);
+  const hsA = text.match(/hourly[:\s]*\$([\d.]+)/i);
+  if (hrA) hourlyMid = Math.round((+hrA[1] + +hrA[2]) / 2);
+  else if (hrB) hourlyMid = Math.round((+hrB[1] + +hrB[2]) / 2);
+  else if (hsA) hourlyMid = +hsA[1];
 
   // Fixed budget
   let fixedBudget = null;
@@ -508,10 +511,15 @@ function processDetailPage() {
 
     if (sliderContent) {
       if (isFullDetailPage) {
-        // Full page: client info is outside sliderContent — use whole page text
-        text = document.body.textContent || '';
+        // Full page: job signals (rate, proposals, age) are in the card container,
+        // but client signals (spend, rating, hires, payment) are in the sidebar.
+        // Combine both: card text + sidebar text, but NOT the full job list on the left.
+        const sidebarEl = document.querySelector('[data-test="about-client-container"], .cfe-ui-job-about-client');
+        const jobText = sliderContent.textContent || '';
+        const clientText = sidebarEl ? sidebarEl.textContent : (document.body.textContent || '');
+        text = jobText + '\n' + clientText;
       } else {
-        // Slider overlay: client info is inside the modal container
+        // Slider overlay: everything is inside the modal container
         text = sliderContent.textContent || '';
       }
       const titleEl = sliderContent.querySelector('h4, h2, h1');
