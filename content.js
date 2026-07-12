@@ -116,7 +116,7 @@ function verdictText(score) {
 }
 
 // ─── Data extraction ──────────────────────────────────────────────────────────
-function extractFromText(text) {
+function extractFromText(text, activityText) {
   // Payment verified — negative lookahead so "unverified" doesn't match
   // "Payment method verified" or "Payment verified" → true
   // "Payment method not verified" / "unverified" → false
@@ -134,10 +134,12 @@ function extractFromText(text) {
 
   // Proposals
   let proposalsMid = null;
-  // Anchor to "Activity on this job" section — immune to connects-cost lines
-  // and future Upwork wording changes around proposals elsewhere on the page.
-  const activityM = text.match(/activity\s+on\s+this\s+job([\s\S]{0,500})/i);
-  const propScope = activityM ? activityM[1] : text;
+  // "Activity on this job" section is sometimes outside the slider container.
+  // Use activityText (full body scoped to that section) when provided,
+  // otherwise fall back to the slider text.
+  const propSource = activityText || text;
+  const activityM = propSource.match(/activity\s+on\s+this\s+job([\s\S]{0,500})/i);
+  const propScope = activityM ? activityM[1] : propSource;
   const pp = propScope.match(/\bproposals\s*[:\s]+50\+/i);
   const pr = propScope.match(/\bproposals\s*[:\s]+(\d+)\s+to\s+(\d+)/i);
   const pl = propScope.match(/\bproposals\s*[:\s]+(?:less|fewer)\s+than\s+(\d+)/i);
@@ -487,7 +489,10 @@ function processCards() {
       scope = scope.parentElement;
     }
     const text = scope.textContent || '';
-    const data = extractFromText(text);
+    // "Activity on this job" can be outside the slider container — grab from full body
+    const activityBodyM = document.body.textContent.match(/activity\s+on\s+this\s+job[\s\S]{0,500}/i);
+    const activityText = activityBodyM ? activityBodyM[0] : null;
+    const data = extractFromText(text, activityText);
     const result = scoreJob(data);
     const badge = renderBadge(result);
 
@@ -545,7 +550,10 @@ function processDetailPage() {
 
     if (!text || text.trim().length < 50) return false;
 
-    const data = extractFromText(text);
+    // "Activity on this job" can be outside the slider container — grab from full body
+    const activityBodyM = document.body.textContent.match(/activity\s+on\s+this\s+job[\s\S]{0,500}/i);
+    const activityText = activityBodyM ? activityBodyM[0] : null;
+    const data = extractFromText(text, activityText);
     const result = scoreJob(data);
     const panel = renderPanel(result);
     panel.setAttribute('data-ubi-panel', '1');
