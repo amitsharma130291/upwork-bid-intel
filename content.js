@@ -199,75 +199,56 @@ function removeTooltip() {
 function renderCompact(result) {
   const { score, grade, color, flags, green } = result;
 
-  // Colour map for background tint
-  const bgMap = {
-    '#22c55e': 'rgba(34,197,94,0.12)',
-    '#84cc16': 'rgba(132,204,22,0.12)',
-    '#f59e0b': 'rgba(245,158,11,0.12)',
-    '#ef4444': 'rgba(239,68,68,0.12)',
-    '#7f1d1d': 'rgba(127,29,29,0.15)',
-  };
-  const bg = bgMap[color] || 'rgba(124,106,247,0.12)';
-
+  // ── Minimal badge: just a coloured dot + score number ──
   const badge = document.createElement('span');
   badge.className = 'ubi-badge';
   badge.setAttribute('data-ubi', '1');
+  badge.setAttribute('tabindex', '0');
   badge.style.cssText = [
     'display:inline-flex',
     'align-items:center',
     'gap:5px',
-    `background:${bg}`,
-    `border:1.5px solid ${color}`,
-    'border-radius:6px',
-    'padding:3px 9px',
+    'background:#f4f4f8',
+    'border:1px solid #d8d8e4',
+    'border-radius:5px',
+    'padding:3px 8px',
     'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
     'font-size:12px',
-    'font-weight:700',
-    `color:${color}`,
-    'cursor:pointer',
+    'font-weight:600',
+    'color:#3a3a4e',
+    'cursor:default',
     'user-select:none',
     'white-space:nowrap',
     'position:relative',
     'vertical-align:middle',
     'line-height:1.4',
-    'text-decoration:none',
     'box-sizing:border-box',
-    'margin:4px 0',
   ].join('!important;') + '!important';
 
-  // Dot
+  // Coloured dot (the only colour)
   const dot = document.createElement('span');
-  dot.style.cssText = [
-    'display:inline-block',
-    'width:7px', 'height:7px',
-    'border-radius:50%',
-    `background:${color}`,
-    'flex-shrink:0',
-  ].join('!important;') + '!important';
+  dot.style.cssText = `display:inline-block!important;width:8px!important;height:8px!important;border-radius:50%!important;background:${color}!important;flex-shrink:0!important;`;
 
-  // Label
+  // Score number — neutral dark text
   const lbl = document.createElement('span');
-  lbl.style.cssText = `font-size:12px!important;font-weight:700!important;color:${color}!important;font-family:inherit!important`;
-  lbl.textContent = score + ' · ' + grade;
+  lbl.style.cssText = 'font-size:12px!important;font-weight:700!important;color:#2a2a3e!important;font-family:inherit!important;';
+  lbl.textContent = score;
 
   badge.appendChild(dot);
   badge.appendChild(lbl);
 
-  // ── Tooltip (appended to body, not inside card) ──
-  function showTooltip() {
-    removeTooltip();
-    const rect = badge.getBoundingClientRect();
+  // ── Tooltip — appended to body, position:fixed with viewport-safe placement ──
+  let hideTimer = null;
 
+  function buildTooltip() {
+    const rect = badge.getBoundingClientRect();
     const tip = document.createElement('div');
     activeTooltip = tip;
 
-    // Outer shell
     tip.style.cssText = [
       'position:fixed',
-      `top:${rect.bottom + window.scrollY + 6}px`,
-      `left:${Math.max(8, rect.left + window.scrollX)}px`,
       'z-index:2147483647',
-      'width:280px',
+      'width:270px',
       'background:#1a1a24',
       'border:1px solid #3a3a4e',
       'border-radius:10px',
@@ -277,56 +258,54 @@ function renderCompact(result) {
       'color:#e8e8f0',
       'overflow:hidden',
       'pointer-events:none',
+      'top:-9999px',
+      'left:-9999px',
     ].join('!important;') + '!important';
 
-    // Header row: big score + grade + verdict
+    // Header: big score + grade pill + one-line verdict
     const hdr = document.createElement('div');
     hdr.style.cssText = 'display:flex!important;align-items:center!important;gap:12px!important;padding:12px 14px!important;border-bottom:1px solid #2e2e3e!important;';
 
     const scoreEl = document.createElement('div');
-    scoreEl.style.cssText = `font-size:30px!important;font-weight:900!important;line-height:1!important;color:${color}!important;flex-shrink:0!important;width:46px!important;text-align:center!important;`;
+    scoreEl.style.cssText = `font-size:32px!important;font-weight:900!important;line-height:1!important;color:${color}!important;flex-shrink:0!important;width:48px!important;text-align:center!important;`;
     scoreEl.textContent = score;
 
     const meta = document.createElement('div');
     meta.style.cssText = 'flex:1!important;min-width:0!important;';
 
-    const gradePill = document.createElement('div');
-    gradePill.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:10px!important;font-weight:700!important;letter-spacing:0.6px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 7px!important;margin-bottom:4px!important;`;
-    gradePill.textContent = grade;
+    const pill = document.createElement('div');
+    pill.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:10px!important;font-weight:800!important;letter-spacing:0.6px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 8px!important;margin-bottom:5px!important;`;
+    pill.textContent = grade;
 
     const verd = document.createElement('div');
-    verd.style.cssText = 'font-size:12px!important;color:#c0c0d8!important;line-height:1.4!important;';
+    verd.style.cssText = 'font-size:12px!important;color:#b0b0c8!important;line-height:1.4!important;';
     verd.textContent = verdictText(score);
 
-    meta.appendChild(gradePill);
+    meta.appendChild(pill);
     meta.appendChild(verd);
     hdr.appendChild(scoreEl);
     hdr.appendChild(meta);
     tip.appendChild(hdr);
 
-    // Signals list
+    // Signals
     if (green.length || flags.length) {
       const sig = document.createElement('div');
       sig.style.cssText = 'padding:8px 14px 10px!important;display:flex!important;flex-direction:column!important;gap:5px!important;';
-
       green.forEach(g => {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex!important;align-items:flex-start!important;gap:7px!important;font-size:11px!important;color:#6ee7b7!important;line-height:1.4!important;';
-        row.innerHTML = '<span style="flex-shrink:0;font-size:12px">✓</span><span>' + g + '</span>';
+        row.innerHTML = '<span style="flex-shrink:0">✓</span><span>' + g + '</span>';
         sig.appendChild(row);
       });
-
       flags.forEach(f => {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex!important;align-items:flex-start!important;gap:7px!important;font-size:11px!important;color:#fcd34d!important;line-height:1.4!important;';
-        row.innerHTML = '<span style="flex-shrink:0;font-size:12px">!</span><span>' + f + '</span>';
+        row.innerHTML = '<span style="flex-shrink:0">!</span><span>' + f + '</span>';
         sig.appendChild(row);
       });
-
       tip.appendChild(sig);
     }
 
-    // Footer
     const foot = document.createElement('div');
     foot.style.cssText = 'background:#111118!important;padding:5px 14px!important;font-size:10px!important;color:#5a5a72!important;border-top:1px solid #2e2e3e!important;';
     foot.textContent = '⚡ Upwork Bid Intel · No account · All local';
@@ -334,22 +313,42 @@ function renderCompact(result) {
 
     document.body.appendChild(tip);
 
-    // Keep tooltip in viewport
+    // ── Position: fixed = viewport coords, NO scrollY offset ──
     requestAnimationFrame(() => {
-      const tr = tip.getBoundingClientRect();
-      if (tr.right > window.innerWidth - 8) {
-        tip.style.left = Math.max(8, window.innerWidth - tr.width - 8) + 'px';
-      }
-      if (tr.bottom > window.innerHeight - 8) {
-        tip.style.top = (rect.top + window.scrollY - tr.height - 6) + 'px';
-      }
+      const tw = tip.offsetWidth  || 270;
+      const th = tip.offsetHeight || 200;
+
+      // Horizontal: align to badge left, keep inside viewport
+      let left = rect.left;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
+      if (left < 8) left = 8;
+
+      // Vertical: below badge by default, flip above if too close to bottom
+      let top = rect.bottom + 6;
+      if (top + th > window.innerHeight - 8) top = rect.top - th - 6;
+      if (top < 8) top = 8;
+
+      tip.style.top  = top  + 'px';
+      tip.style.left = left + 'px';
     });
+
+    return tip;
+  }
+
+  function showTooltip() {
+    clearTimeout(hideTimer);
+    removeTooltip();
+    buildTooltip();
+  }
+
+  function scheduleHide() {
+    hideTimer = setTimeout(removeTooltip, 120);
   }
 
   badge.addEventListener('mouseenter', showTooltip);
-  badge.addEventListener('mouseleave', removeTooltip);
-  badge.addEventListener('focusin', showTooltip);
-  badge.addEventListener('focusout', removeTooltip);
+  badge.addEventListener('mouseleave', scheduleHide);
+  badge.addEventListener('focus',      showTooltip);
+  badge.addEventListener('blur',       scheduleHide);
 
   return badge;
 }
