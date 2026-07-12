@@ -489,10 +489,30 @@ function processCards() {
       scope = scope.parentElement;
     }
     const text = scope.textContent || '';
-    // "Activity on this job" can be outside the slider container — grab from full body
+    // Proposals: read from DOM span.value inside .ca-item — immune to tooltip text injection
+    // textContent regex fails because Upwork injects tooltip HTML between "Proposals:" and "50+"
+    let domProposalsMid = null;
+    document.querySelectorAll('.ca-item').forEach(item => {
+      const title = item.querySelector('.title');
+      if (title && /proposals/i.test(title.textContent)) {
+        const val = (item.querySelector('.value, span.value') || {}).textContent || '';
+        const v = val.trim();
+        if (/50\+/.test(v)) domProposalsMid = 50;
+        else {
+          const rng = v.match(/(\d+)\s+to\s+(\d+)/i);
+          const few = v.match(/fewer|less/i);
+          const num = v.match(/\d+/);
+          if (rng) domProposalsMid = Math.round((+rng[1] + +rng[2]) / 2);
+          else if (few && num) domProposalsMid = Math.round(+num[0] / 2);
+          else if (num) domProposalsMid = +num[0];
+        }
+      }
+    });
     const activityBodyM = document.body.textContent.match(/activity\s+on\s+this\s+job[\s\S]{0,500}/i);
     const activityText = activityBodyM ? activityBodyM[0] : null;
     const data = extractFromText(text, activityText);
+    // Override proposals with DOM-read value if available (more reliable)
+    if (domProposalsMid !== null) data.proposalsMid = domProposalsMid;
     const result = scoreJob(data);
     const badge = renderBadge(result);
 
@@ -550,10 +570,30 @@ function processDetailPage() {
 
     if (!text || text.trim().length < 50) return false;
 
-    // "Activity on this job" can be outside the slider container — grab from full body
+    // Proposals: read from DOM span.value inside .ca-item — immune to tooltip text injection
+    // textContent regex fails because Upwork injects tooltip HTML between "Proposals:" and "50+"
+    let domProposalsMid = null;
+    document.querySelectorAll('.ca-item').forEach(item => {
+      const title = item.querySelector('.title');
+      if (title && /proposals/i.test(title.textContent)) {
+        const val = (item.querySelector('.value, span.value') || {}).textContent || '';
+        const v = val.trim();
+        if (/50\+/.test(v)) domProposalsMid = 50;
+        else {
+          const rng = v.match(/(\d+)\s+to\s+(\d+)/i);
+          const few = v.match(/fewer|less/i);
+          const num = v.match(/\d+/);
+          if (rng) domProposalsMid = Math.round((+rng[1] + +rng[2]) / 2);
+          else if (few && num) domProposalsMid = Math.round(+num[0] / 2);
+          else if (num) domProposalsMid = +num[0];
+        }
+      }
+    });
     const activityBodyM = document.body.textContent.match(/activity\s+on\s+this\s+job[\s\S]{0,500}/i);
     const activityText = activityBodyM ? activityBodyM[0] : null;
     const data = extractFromText(text, activityText);
+    // Override proposals with DOM-read value if available (more reliable)
+    if (domProposalsMid !== null) data.proposalsMid = domProposalsMid;
     const result = scoreJob(data);
     const panel = renderPanel(result);
     panel.setAttribute('data-ubi-panel', '1');
