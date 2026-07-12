@@ -107,8 +107,10 @@ function verdictText(score) {
 // ─── Data extraction ──────────────────────────────────────────────────────────
 function extractFromText(text) {
   // Payment verified — negative lookahead so "unverified" doesn't match
-  const paymentVerified = /payment\s+(?!un)verified/i.test(text) ? true
-    : /payment\s+un/i.test(text) || /payment\s+not/i.test(text) ? false
+  // "Payment method verified" or "Payment verified" → true
+  // "Payment method not verified" / "unverified" → false
+  const paymentVerified = /payment(?:\s+method)?\s+verified/i.test(text) ? true
+    : /payment(?:\s+method)?\s+(?:un|not\s+)verified/i.test(text) ? false
     : null;
 
   // Job age
@@ -145,22 +147,33 @@ function extractFromText(text) {
 
   // Client spend
   let clientSpend = null;
-  const sm = text.match(/\$([\d,.]+)(k\+?)?\s*\+?\s*spent/i);
+  // Match "$440K spent", "$5K+ spent", "$0 total spent", "$1,234 spent"
+  const sm = text.match(/\$([\d,.]+)(k\+?)?\s*(?:\+\s*)?(?:total\s+)?spent/i);
   if (sm) {
     let v = parseFloat(sm[1].replace(/,/g,''));
     if (sm[2] && /k/i.test(sm[2])) v *= 1000;
     clientSpend = v;
   }
 
-  // Client hires
+  // Client hires — match "N hires" but NOT "hire rate" or "% hire rate"
   let clientHires = null;
   if (/no\s+hires/i.test(text)) clientHires = 0;
-  else { const m = text.match(/(\d+)\s+hires/i); if (m) clientHires = +m[1]; }
+  else {
+    const m = text.match(/(\d+)\s+hires[^a-z]/i) || text.match(/(\d+)\s+hires$/im);
+    if (m) clientHires = +m[1];
+  }
 
   // Client rating (1.0–5.9)
+  // Client rating — require explicit rating context; avoid bare decimals like "0.00 of 0 reviews"
   let clientRating = null;
-  const rm = text.match(/(?:★|[⭐]|rating)[^\d]*([1-5]\.\d)/i) || text.match(/\b([4-5]\.\d)\b/);
-  if (rm) clientRating = parseFloat(rm[1]);
+  const rmCtx = text.match(/(?:★|[⭐]|rating\s+is)[^\d]*([1-5]\.\d)/i) ||
+                 text.match(/([1-5]\.\d)\s*(?:of\s*5|★|stars?)/i);
+  if (rmCtx) clientRating = parseFloat(rmCtx[1]);
+  // Also catch "4.9 of 38 reviews" pattern (Upwork profile ratings)
+  if (!clientRating) {
+    const rmRev = text.match(/([1-5]\.\d)\s+of\s+\d+\s+reviews?/i);
+    if (rmRev) clientRating = parseFloat(rmRev[1]);
+  }
 
   return { paymentVerified, daysPosted, proposalsMid, hourlyMid, fixedBudget, clientSpend, clientHires, clientRating };
 }
@@ -464,20 +477,33 @@ function processDetailPage() {
     let text = '';
     let insertAfter = null;
 
-    // ── Strategy 1: find the job detail slider ──
-    // Upwork renders the slider as:
-    //   div.job-details-content > div.job-details-card > div.air3-card-sections
-    //   OR directly as div.air3-card-sections (when no outer wrapper)
+    // ── Strategy 1: find the job detail container ──
+    // Two cases:
+    // A) Full detail page (/details/~uid or /jobs/~uid URL) — client info is
+    //    in a separate sidebar column, outside air3-card-sections. Use full
+    //    page text but find the card container only for the insertion point.
+    // B) Slider overlay (no URL change) — the ENTIRE modal content is inside
+    //    air3-card-sections, so scoped text is correct.
+    //
     // CRITICAL: when the slider is open the full page has MANY .air3-card-sections
-    // (one per list card). The modal one is uniquely the one containing an h4 title.
-    // List job cards use h3; the modal/slider uses h4.
+    // (one per list card). The modal one uniquely contains an h4.
+
+    const isFullDetailPage = /(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(location.href);
+
     let sliderContent =
       document.querySelector('.job-details-content') ||
       document.querySelector('.job-details-card') ||
       Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
       null;
+
     if (sliderContent) {
-      text = sliderContent.textContent || '';
+      if (isFullDetailPage) {
+        // Full page: client info is outside sliderContent — use whole page text
+        text = document.body.textContent || '';
+      } else {
+        // Slider overlay: client info is inside the modal container
+        text = sliderContent.textContent || '';
+      }
       const titleEl = sliderContent.querySelector('h4, h2, h1');
       if (titleEl) insertAfter = titleEl;
     }
@@ -510,11 +536,14 @@ function processDetailPage() {
     // If "About the client" hasn't loaded yet, the score will be missing
     // payment/rating/spend/hires data and will look artificially high.
     // Check that at least one client signal is visible before we inject.
+    // Wait for client section to be present before scoring
+    // (it loads async and without it we get an artificially high score)
+    const clientCheckText = isFullDetailPage ? (document.body.textContent || '') : text;
     const hasClientSection = sliderContent && (
-      /payment\s+(un)?verified/i.test(text) ||
-      /spent/i.test(text) ||
-      /hires/i.test(text) ||
-      /\d+\s+reviews?/i.test(text)
+      /payment\s+(un)?verified/i.test(clientCheckText) ||
+      /spent/i.test(clientCheckText) ||
+      /hires/i.test(clientCheckText) ||
+      /\d+\s+reviews?/i.test(clientCheckText)
     );
     if (!hasClientSection) return false; // client block still loading — retry
 
