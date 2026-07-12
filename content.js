@@ -392,7 +392,7 @@ function processCards() {
 // ─── Slider / detail page ─────────────────────────────────────────────────────
 function processDetailPage() {
   const m = location.href.match(/(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i);
-  const hasSlider = !!document.querySelector('.job-details-content, .job-details-card');
+  const hasSlider = !!document.querySelector('.job-details-content, .job-details-card, .air3-card-sections, section.air3-card-section');
   // Upwork sometimes opens the job modal without changing the URL.
   // If the slider exists, score it even when /details/~uid is absent.
   if (!m && !hasSlider) return;
@@ -412,7 +412,7 @@ function processDetailPage() {
     // ── Strategy 1: div.job-details-content (the slider container) ──
     // DOM: div.job-details-content > div.job-details-card.slider >
     //      div.air3-card-sections > section.air3-card-section > h4
-    const sliderContent = document.querySelector('.job-details-content, .job-details-card');
+    const sliderContent = document.querySelector('.job-details-content, .job-details-card, .air3-card-sections, section.air3-card-section');
     if (sliderContent) {
       text = sliderContent.textContent || '';
       const titleEl = sliderContent.querySelector('h4, h3, h2, h1');
@@ -451,7 +451,7 @@ function processDetailPage() {
     if (insertAfter && insertAfter.parentNode) {
       insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
     } else {
-      const container = document.querySelector('.job-details-content, main') || document.body;
+      const container = document.querySelector('.job-details-content, .air3-card-sections, section.air3-card-section, main') || document.body;
       container.prepend(panel);
     }
     return true; // signal: success
@@ -493,7 +493,7 @@ new MutationObserver(() => {
 
   // Slider content appeared dynamically — inject panel even if Upwork
   // did not update the URL to /details/~uid.
-  const slider = document.querySelector('.job-details-content, .job-details-card');
+  const slider = document.querySelector('.job-details-content, .job-details-card, .air3-card-sections, section.air3-card-section');
   if (slider && !document.querySelector('[data-ubi-panel]')) {
     clearTimeout(throttle);
     throttle = setTimeout(processDetailPage, 300);
