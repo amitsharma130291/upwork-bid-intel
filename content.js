@@ -576,47 +576,73 @@ function processCards() {
 }
 // ─── Detail page ──────────────────────────────────────────────────────────────
 function processDetailPage() {
-  // Match all Upwork job detail URL patterns:
-  // /jobs/~0123                          (classic job detail)
-  // /find-work/best-matches/details/~0123 (Best Matches slider panel)
-  // /find-work/most-recent/details/~0123  (Most Recent slider)
-  // /find-work/my-feed/details/~0123      (My Feed slider)
-  const JOB_DETAIL_RE = /(?:\/jobs\/|\/details\/)~[0-9a-f]+/i;
-  if (!location.href.match(JOB_DETAIL_RE)) return;
-
-  // Don't double-inject
+  const JOB_DETAIL_RE = /(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i;
+  const urlMatch = location.href.match(JOB_DETAIL_RE);
+  if (!urlMatch) return;
   if (document.querySelector('[data-ubi-panel]')) return;
 
-  // For the slider panel, scope to the panel element to avoid
-  // reading text from the list behind it
-  const sliderEl = document.querySelector([
-    '[role="dialog"]',
-    '[role="complementary"]',
-    '[class*="SliderPanel"]',
-    '[class*="slide-panel"]',
-    '[class*="JobDetails"]:not([class*="list"])',
-    '[class*="detail-view"]',
-  ].join(','));
+  const jobUid = urlMatch[1]; // e.g. "022075..."
 
-  const scopeEl = sliderEl || document.body;
-  const text = scopeEl.textContent || '';
+  // ── Strategy 1: find the matching background card by job URL ──
+  // This guarantees the slider scores IDENTICALLY to the list badge.
+  // The card's link href contains the same UID.
+  const matchingCard = Array.from(
+    document.querySelectorAll('a[href*="/jobs/"], a[href*="/details/"]')
+  ).find(a => (a.href || a.getAttribute('href') || '').includes(jobUid))
+   ?.closest('[data-ubi-done], article, li, section');
+
+  let text = '';
+
+  if (matchingCard) {
+    // Use exact same text the badge used
+    text = matchingCard.textContent || '';
+  } else {
+    // ── Strategy 2: find the slider pane and scope to it only ──
+    // Try selectors that match ONLY the slider/modal content,
+    // not the background list.
+    const SLIDER_SELECTORS = [
+      '[role="dialog"]',
+      '[role="complementary"]',
+      '[class*="slider"][class*="panel" i]',
+      '[class*="SliderPanel"]',
+      '[class*="ModalSlider"]',
+      '[class*="JobDetails"][class*="modal" i]',
+      '[class*="job-details"][class*="panel" i]',
+    ];
+    const sliderEl = document.querySelector(SLIDER_SELECTORS.join(','));
+
+    if (sliderEl) {
+      text = sliderEl.textContent || '';
+    } else {
+      // ── Strategy 3: reconstruct from visible slider h1 area ──
+      // Find the h1 title and take a generous slice of surrounding text
+      const h1 = document.querySelector('h1');
+      if (h1) {
+        // Walk up 3 levels to get the panel wrapper
+        let el = h1;
+        for (let i = 0; i < 4 && el.parentElement; i++) el = el.parentElement;
+        text = el.textContent || '';
+      } else {
+        text = document.body.textContent || '';
+      }
+    }
+  }
+
   const data = extractFromText(text);
   const result = scoreJob(data);
   const panel = renderPanel(result);
   panel.setAttribute('data-ubi-panel', '1');
 
-  // Insert after the h1/h2 job title inside the scoped element
-  const titleEl = scopeEl.querySelector('h1') || document.querySelector('h1');
-  if (titleEl && titleEl.parentNode) {
-    titleEl.parentNode.insertBefore(panel, titleEl.nextSibling);
+  // Insert after h1 in the slider/modal
+  const h1 = document.querySelector(
+    '[role="dialog"] h1, [role="complementary"] h1, main h1, h1'
+  );
+  if (h1 && h1.parentNode) {
+    h1.parentNode.insertBefore(panel, h1.nextSibling);
   } else {
-    // Fallback: top of the scoped pane
-    if (scopeEl !== document.body) {
-      scopeEl.prepend(panel);
-    } else {
-      const main = document.querySelector('main, [role="main"]');
-      if (main) main.prepend(panel);
-    }
+    const main = document.querySelector('main, [role="main"]');
+    if (main) main.prepend(panel);
+    else document.body.prepend(panel);
   }
 }
 
