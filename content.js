@@ -104,7 +104,7 @@ function extractFromText(text) {
   // Proposals
   let proposalsMid = null;
   const pr = text.match(/proposals?[:\s]+(\d+)\s+to\s+(\d+)/i);
-  const pl = text.match(/proposals?[:\s]+less\s+than\s+(\d+)/i);
+  const pl = text.match(/proposals?[:\s]+(?:less|fewer)\s+than\s+(\d+)/i);
   const pp = text.match(/proposals?[:\s]*50\+/i);
   const ps = text.match(/proposals?[:\s]+(\d+)/i);
   if (pp) proposalsMid = 50;
@@ -374,7 +374,6 @@ function processCards() {
 
 // ─── Slider / detail page ─────────────────────────────────────────────────────
 function processDetailPage() {
-  // Matches: /jobs/~hex  or  /details/~hex  (slider panels)
   const m = location.href.match(/(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i);
   if (!m) return;
 
@@ -382,38 +381,59 @@ function processDetailPage() {
   document.querySelectorAll('[data-ubi-panel]').forEach(el => el.remove());
 
   const jobUid = m[1];
-
-  // Find the job title link matching this UID — guaranteed same card text as the badge
-  const titleLink = Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
-    .find(a => (a.getAttribute('href') || '').includes(jobUid));
-
   let text = '';
 
-  if (titleLink) {
-    // Walk up to get a reasonable scope around this specific job
-    let scope = titleLink;
-    for (let i = 0; i < 6 && scope.parentElement; i++) scope = scope.parentElement;
-    text = scope.textContent || '';
-  } else {
-    // Slider opened without background card — find the slider container
-    const slider = document.querySelector(
-      '[role="dialog"], [role="complementary"], [class*="slider" i], [class*="Slider"]'
-    );
-    text = (slider || document.body).textContent || '';
+  // Strategy 1: reuse the card text (same source as the badge = same score)
+  const cardLink = Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
+    .find(a => (a.getAttribute('href') || '').includes(jobUid));
+  const card = cardLink?.closest('[data-ubi-done], [data-test="job-tile"], article');
+  if (card) {
+    text = card.textContent || '';
   }
 
-  if (!text.trim()) return;
+  // Strategy 2: Upwork's slider element (.air3-slider)
+  if (!text) {
+    const slider = document.querySelector(
+      '.air3-slider-body, .air3-slider, [slidername="job-details"]'
+    );
+    if (slider) text = slider.textContent || '';
+  }
+
+  // Strategy 3: walk up from a heading inside the right-side panel
+  if (!text) {
+    // Find h1/h2 that is NOT inside the nav/sidebar
+    const headings = Array.from(document.querySelectorAll('h1, h2'));
+    const heading = headings.find(h => !h.closest('nav, header, [class*="nav-v2"], [class*="sidebar"]'));
+    if (heading) {
+      let el = heading;
+      for (let i = 0; i < 5 && el.parentElement; i++) el = el.parentElement;
+      text = el.textContent || '';
+    }
+  }
+
+  if (!text || text.trim().length < 30) return;
 
   const data = extractFromText(text);
   const result = scoreJob(data);
   const panel = renderPanel(result);
+  panel.setAttribute('data-ubi-panel', '1');
 
-  // Insert after the first h1 or h2 on the page / in the slider
-  const h = document.querySelector('[role="dialog"] h1, [role="complementary"] h1, main h1, h1, h2');
-  if (h && h.parentNode) {
-    h.parentNode.insertBefore(panel, h.nextSibling);
+  // Insert: find the job title heading INSIDE the slider body
+  // Upwork slider has .air3-slider-body containing the job title as h1
+  const sliderBody = document.querySelector('.air3-slider-body, .air3-slider, [slidername="job-details"]');
+  let titleEl = sliderBody ? sliderBody.querySelector('h1, h2') : null;
+
+  if (!titleEl) {
+    // Any h1/h2 not in the nav
+    const heads = Array.from(document.querySelectorAll('h1, h2'));
+    titleEl = heads.find(h => !h.closest('nav, header, [class*="nav-v2"]'));
+  }
+
+  if (titleEl && titleEl.parentNode) {
+    titleEl.parentNode.insertBefore(panel, titleEl.nextSibling);
   } else {
-    (document.querySelector('main') || document.body).prepend(panel);
+    const container = sliderBody || document.querySelector('main') || document.body;
+    container.prepend(panel);
   }
 }
 
