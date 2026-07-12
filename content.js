@@ -7,78 +7,82 @@
 // ─── Scoring engine ───────────────────────────────────────────────────────────
 function scoreJob(d) {
   let score = 100;
+  // Each flag/green is {text, pts} where pts is the point change (negative = deduction, 0 = neutral good)
   const flags = [], green = [];
+
+  function addFlag(text, pts) { score -= pts; flags.push({ text, pts }); }
+  function addGreen(text)     { green.push({ text, pts: 0 }); }
 
   // ── CLIENT RATING ──
   if (d.clientRating !== null && d.clientRating > 0) {
-    if (d.clientRating >= 4.8)       green.push('Top-rated client (' + d.clientRating + '★)');
-    else if (d.clientRating >= 4.5)  green.push('Good client rating (' + d.clientRating + ')');
-    else if (d.clientRating >= 4.0)  { score -= 5;  flags.push('Average client rating: ' + d.clientRating); }
-    else if (d.clientRating >= 3.5)  { score -= 15; flags.push('Below-avg client rating: ' + d.clientRating); }
-    else                             { score -= 25; flags.push('Low client rating: ' + d.clientRating); }
+    if (d.clientRating >= 4.8)       addGreen('Top-rated client (' + d.clientRating + '★)');
+    else if (d.clientRating >= 4.5)  addGreen('Good client rating (' + d.clientRating + ')');
+    else if (d.clientRating >= 4.0)  addFlag('Average client rating: ' + d.clientRating, 5);
+    else if (d.clientRating >= 3.5)  addFlag('Below-avg client rating: ' + d.clientRating, 15);
+    else                             addFlag('Low client rating: ' + d.clientRating, 25);
   } else {
-    score -= 15; flags.push('No client rating — new to Upwork');
+    addFlag('No client rating — new to Upwork', 15);
   }
 
   // ── CLIENT SPEND (track record) ──
   if (d.clientSpend !== null) {
-    if (d.clientSpend === 0)           { score -= 15; flags.push('$0 spent — brand new account'); }
-    else if (d.clientSpend < 500)      { score -= 10; flags.push('Only $' + d.clientSpend + ' spent — very little history'); }
-    else if (d.clientSpend < 1000)     { score -= 3;  flags.push('Limited spend: $' + d.clientSpend); }
-    else if (d.clientSpend >= 50000)   green.push('$' + (d.clientSpend/1000).toFixed(0) + 'K+ spent — seasoned client 💪');
-    else if (d.clientSpend >= 10000)   green.push('$' + (d.clientSpend/1000).toFixed(0) + 'K+ spent');
-    else if (d.clientSpend >= 1000)    green.push('$' + (d.clientSpend/1000).toFixed(1) + 'K spent');
+    if (d.clientSpend === 0)           addFlag('$0 spent — brand new account', 15);
+    else if (d.clientSpend < 500)      addFlag('Only $' + d.clientSpend + ' spent — very little history', 10);
+    else if (d.clientSpend < 1000)     addFlag('Limited spend: $' + d.clientSpend, 3);
+    else if (d.clientSpend >= 50000)   addGreen('$' + (d.clientSpend/1000).toFixed(0) + 'K+ spent — seasoned client 💪');
+    else if (d.clientSpend >= 10000)   addGreen('$' + (d.clientSpend/1000).toFixed(0) + 'K+ spent');
+    else if (d.clientSpend >= 1000)    addGreen('$' + (d.clientSpend/1000).toFixed(1) + 'K spent');
   }
 
   // ── CLIENT HIRES ──
   if (d.clientHires !== null) {
-    if (d.clientHires === 0)      { score -= 10; flags.push('0 hires ever'); }
-    else if (d.clientHires >= 10) green.push(d.clientHires + ' total hires');
-    else if (d.clientHires >= 3)  green.push(d.clientHires + ' hires');
+    if (d.clientHires === 0)      addFlag('0 hires ever', 10);
+    else if (d.clientHires >= 10) addGreen(d.clientHires + ' total hires');
+    else if (d.clientHires >= 3)  addGreen(d.clientHires + ' hires');
   }
 
   // ── PAYMENT VERIFICATION ──
-  if (d.paymentVerified === false)     { score -= 20; flags.push('Payment NOT verified ⚠️'); }
-  else if (d.paymentVerified === true) green.push('Payment verified ✓');
+  if (d.paymentVerified === false)     addFlag('Payment NOT verified ⚠️', 20);
+  else if (d.paymentVerified === true) addGreen('Payment verified ✓');
 
   // ── JOB AGE ──
   if (d.daysPosted !== null) {
-    if (d.daysPosted > 60)      { score -= 30; flags.push('Posted ' + d.daysPosted + 'd ago — very stale'); }
-    else if (d.daysPosted > 30) { score -= 20; flags.push('Posted ' + d.daysPosted + 'd ago — stale'); }
-    else if (d.daysPosted > 14) { score -= 10; flags.push('Posted ' + d.daysPosted + 'd ago'); }
-    else if (d.daysPosted > 3)  { /* 4–14 days: neutral, no flag */ }
-    else if (d.daysPosted === 0) green.push('Posted today — very fresh 🔥');
-    else                         green.push('Posted ' + d.daysPosted + 'd ago — fresh');
+    if (d.daysPosted > 60)      addFlag('Posted ' + d.daysPosted + 'd ago — very stale', 30);
+    else if (d.daysPosted > 30) addFlag('Posted ' + d.daysPosted + 'd ago — stale', 20);
+    else if (d.daysPosted > 14) addFlag('Posted ' + d.daysPosted + 'd ago', 10);
+    else if (d.daysPosted > 3)  { /* 4–14 days: neutral */ }
+    else if (d.daysPosted === 0) addGreen('Posted today — very fresh 🔥');
+    else                         addGreen('Posted ' + d.daysPosted + 'd ago — fresh');
   }
 
   // ── PROPOSALS (competition) ──
   if (d.proposalsMid !== null) {
-    if (d.proposalsMid >= 50)       { score -= 20; flags.push('50+ proposals — very crowded'); }
-    else if (d.proposalsMid >= 30)  { score -= 12; flags.push('~' + d.proposalsMid + ' proposals — crowded'); }
-    else if (d.proposalsMid >= 20)  { score -= 7;  flags.push('~' + d.proposalsMid + ' proposals — competitive'); }
-    else if (d.proposalsMid >= 10)  { score -= 3;  flags.push('~' + d.proposalsMid + ' proposals'); }
-    else if (d.proposalsMid <= 5)   green.push('Only ~' + d.proposalsMid + ' proposals 🎯');
-    else                            green.push('~' + d.proposalsMid + ' proposals');
+    if (d.proposalsMid >= 50)       addFlag('50+ proposals — very crowded', 20);
+    else if (d.proposalsMid >= 30)  addFlag('~' + d.proposalsMid + ' proposals — crowded', 12);
+    else if (d.proposalsMid >= 20)  addFlag('~' + d.proposalsMid + ' proposals — competitive', 7);
+    else if (d.proposalsMid >= 10)  addFlag('~' + d.proposalsMid + ' proposals', 3);
+    else if (d.proposalsMid <= 5)   addGreen('Only ~' + d.proposalsMid + ' proposals 🎯');
+    else                            addGreen('~' + d.proposalsMid + ' proposals');
   }
 
   // ── HOURLY RATE ──
   if (d.hourlyMid !== null) {
-    if (d.hourlyMid < 10)       { score -= 25; flags.push('$' + d.hourlyMid + '/hr — race to bottom'); }
-    else if (d.hourlyMid < 20)  { score -= 15; flags.push('Low rate: ~$' + d.hourlyMid + '/hr'); }
-    else if (d.hourlyMid < 30)  { score -= 5;  flags.push('Below-market: ~$' + d.hourlyMid + '/hr'); }
-    else if (d.hourlyMid >= 60) green.push('Strong rate: ~$' + d.hourlyMid + '/hr 💰');
-    else if (d.hourlyMid >= 40) green.push('Good rate: ~$' + d.hourlyMid + '/hr');
-    else                        { /* $30–39: neutral */ }
+    if (d.hourlyMid < 10)       addFlag('$' + d.hourlyMid + '/hr — race to bottom', 25);
+    else if (d.hourlyMid < 20)  addFlag('Low rate: ~$' + d.hourlyMid + '/hr', 15);
+    else if (d.hourlyMid < 30)  addFlag('Below-market: ~$' + d.hourlyMid + '/hr', 5);
+    else if (d.hourlyMid >= 60) addGreen('Strong rate: ~$' + d.hourlyMid + '/hr 💰');
+    else if (d.hourlyMid >= 40) addGreen('Good rate: ~$' + d.hourlyMid + '/hr');
+    // $30–39: neutral
   }
 
   // ── FIXED BUDGET ──
   if (d.fixedBudget !== null && d.hourlyMid === null) {
-    if (d.fixedBudget < 50)         { score -= 25; flags.push('Budget <$50 — not worth it'); }
-    else if (d.fixedBudget < 150)   { score -= 15; flags.push('Very low budget: $' + d.fixedBudget); }
-    else if (d.fixedBudget < 300)   { score -= 8;  flags.push('Low budget: $' + d.fixedBudget); }
-    else if (d.fixedBudget < 500)   { score -= 3;  flags.push('Modest budget: $' + d.fixedBudget); }
-    else if (d.fixedBudget >= 2000) green.push('Strong budget: $' + d.fixedBudget + ' 💰');
-    else if (d.fixedBudget >= 500)  green.push('Decent budget: $' + d.fixedBudget);
+    if (d.fixedBudget < 50)         addFlag('Budget <$50 — not worth it', 25);
+    else if (d.fixedBudget < 150)   addFlag('Very low budget: $' + d.fixedBudget, 15);
+    else if (d.fixedBudget < 300)   addFlag('Low budget: $' + d.fixedBudget, 8);
+    else if (d.fixedBudget < 500)   addFlag('Modest budget: $' + d.fixedBudget, 3);
+    else if (d.fixedBudget >= 2000) addGreen('Strong budget: $' + d.fixedBudget + ' 💰');
+    else if (d.fixedBudget >= 500)  addGreen('Decent budget: $' + d.fixedBudget);
   }
 
   score = Math.max(0, Math.min(100, score));
@@ -231,13 +235,14 @@ function renderBadge(result) {
       green.forEach(g => {
         const r = document.createElement('div');
         r.style.cssText = 'display:flex!important;gap:6px!important;font-size:11px!important;color:#6ee7b7!important;line-height:1.4!important;';
-        r.innerHTML = '<span style="flex-shrink:0">✓</span><span>' + g + '</span>';
+        r.innerHTML = '<span style="flex-shrink:0">✓</span><span>' + g.text + '</span>';
         sig.appendChild(r);
       });
       flags.forEach(f => {
         const r = document.createElement('div');
-        r.style.cssText = 'display:flex!important;gap:6px!important;font-size:11px!important;color:#fcd34d!important;line-height:1.4!important;';
-        r.innerHTML = '<span style="flex-shrink:0">!</span><span>' + f + '</span>';
+        r.style.cssText = 'display:flex!important;justify-content:space-between!important;gap:6px!important;font-size:11px!important;color:#fcd34d!important;line-height:1.4!important;';
+        r.innerHTML = '<span style="display:flex;gap:6px"><span style="flex-shrink:0">!</span><span>' + f.text + '</span></span>' +
+          '<span style="flex-shrink:0;opacity:0.7;font-size:10px;padding-left:6px">−' + f.pts + ' pts</span>';
         sig.appendChild(r);
       });
       tip.appendChild(sig);
@@ -315,12 +320,12 @@ function renderPanel(result) {
     green.forEach(g => {
       const c = document.createElement('span');
       c.style.cssText = 'background:#f0fdf4!important;color:#166534!important;border:1px solid #bbf7d0!important;border-radius:5px!important;padding:2px 8px!important;font-size:11px!important;white-space:nowrap!important;';
-      c.textContent = '✓ ' + g; chips.appendChild(c);
+      c.textContent = '✓ ' + g.text; chips.appendChild(c);
     });
     flags.forEach(f => {
       const c = document.createElement('span');
       c.style.cssText = 'background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important;border-radius:5px!important;padding:2px 8px!important;font-size:11px!important;white-space:nowrap!important;';
-      c.textContent = '! ' + f; chips.appendChild(c);
+      c.textContent = '! ' + f.text + ' (−' + f.pts + ' pts)'; chips.appendChild(c);
     });
     R.appendChild(chips);
   }
