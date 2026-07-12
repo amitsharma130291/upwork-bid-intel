@@ -695,7 +695,45 @@ onRouteChange();
 // Popup message handler
 chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === 'GET_PAGE_DATA') {
-    const data = extractFromText(document.body.textContent || '');
+    // Use same scoped text as the modal inject — NOT document.body (all 30 cards bleed together)
+    let text = '';
+
+    // 1. Prefer the slider/detail container (same source as modal panel)
+    const slider =
+      document.querySelector('.job-details-content') ||
+      document.querySelector('.job-details-card') ||
+      Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4'));
+    if (slider) {
+      text = slider.textContent || '';
+      const sidebarEl = document.querySelector('[data-test="about-client-container"], .cfe-ui-job-about-client');
+      if (sidebarEl && !slider.contains(sidebarEl)) text += '\n' + (sidebarEl.textContent || '');
+    }
+
+    // 2. Fallback: full body (popup open on a listing page, no detail slider present)
+    if (!text) text = document.body.textContent || '';
+
+    const activityBodyM = document.body.textContent.match(/activity\s+on\s+this\s+job[\s\S]{0,500}/i);
+    const activityText = activityBodyM ? activityBodyM[0] : null;
+    const data = extractFromText(text, activityText);
+
+    // Also read proposals from DOM if available
+    document.querySelectorAll('.ca-item').forEach(item => {
+      const title = item.querySelector('.title');
+      if (title && /proposals/i.test(title.textContent)) {
+        const val = (item.querySelector('.value, span.value') || {}).textContent || '';
+        const v = val.trim();
+        if (/50\+/.test(v)) data.proposalsMid = 50;
+        else {
+          const rng = v.match(/(\d+)\s+to\s+(\d+)/i);
+          const few = v.match(/fewer|less/i);
+          const num = v.match(/\d+/);
+          if (rng) data.proposalsMid = Math.round((+rng[1] + +rng[2]) / 2);
+          else if (few && num) data.proposalsMid = Math.round(+num[0] / 2);
+          else if (num) data.proposalsMid = +num[0];
+        }
+      }
+    });
+
     const result = scoreJob(data);
     sendResponse({ result, url: location.href });
   }
