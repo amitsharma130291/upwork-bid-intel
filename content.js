@@ -399,33 +399,38 @@ function processDetailPage() {
 
   const jobUid = m[1];
   let text = '';
+  let insertAfter = null; // the element we insert the panel after
 
-  // Strategy 1: reuse the card text (same source as the badge = same score)
-  const cardLink = Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
-    .find(a => (a.getAttribute('href') || '').includes(jobUid));
-  const card = cardLink?.closest('[data-ubi-done], [data-test="job-tile"], article');
-  if (card) {
-    text = card.textContent || '';
+  // ── Strategy 1: scope to div.job-details-content (the slider) ──
+  // The Best Matches slider uses:
+  //   div.job-details-content > div.job-details-card.slider > div.air3-card-sections > section > h4
+  const sliderContent = document.querySelector('.job-details-content, .job-details-card');
+  if (sliderContent) {
+    text = sliderContent.textContent || '';
+    // Title is h4 inside the first section
+    const h4 = sliderContent.querySelector('h4, h3, h2, h1');
+    if (h4) insertAfter = h4;
   }
 
-  // Strategy 2: Upwork's slider element (.air3-slider)
+  // ── Strategy 2: reuse matching card text from the list (same score as badge) ──
   if (!text) {
-    const slider = document.querySelector(
-      '.air3-slider-body, .air3-slider, [slidername="job-details"]'
-    );
-    if (slider) text = slider.textContent || '';
+    const cardLink = Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
+      .find(a => (a.getAttribute('href') || '').includes(jobUid));
+    const card = cardLink?.closest('section, [data-ubi-done], article');
+    if (card) text = card.textContent || '';
   }
 
-  // Strategy 3: walk up from a heading inside the right-side panel
+  // ── Strategy 3: fallback to any heading not in nav ──
   if (!text) {
-    // Find h1/h2 that is NOT inside the nav/sidebar
-    const headings = Array.from(document.querySelectorAll('h1, h2'));
-    const heading = headings.find(h => !h.closest('nav, header, [class*="nav-v2"], [class*="sidebar"]'));
+    const heading = Array.from(document.querySelectorAll('h1, h2, h3, h4'))
+      .find(h => !h.closest('nav, header'));
     if (heading) {
       let el = heading;
-      // Walk up to section boundary in slider
-    while (el.parentElement && el.tagName.toLowerCase() !== 'section' && el.tagName.toLowerCase() !== 'main') el = el.parentElement;
+      while (el.parentElement && !['section','main','body'].includes(el.tagName.toLowerCase())) {
+        el = el.parentElement;
+      }
       text = el.textContent || '';
+      if (!insertAfter) insertAfter = heading;
     }
   }
 
@@ -436,26 +441,16 @@ function processDetailPage() {
   const panel = renderPanel(result);
   panel.setAttribute('data-ubi-panel', '1');
 
-  // Insert: find the job title heading INSIDE the slider body
-  // Upwork slider has .air3-slider-body containing the job title as h1
-  const sliderBody = document.querySelector('.air3-slider-body, .air3-slider, [slidername="job-details"]');
-  let titleEl = sliderBody ? sliderBody.querySelector('h1, h2') : null;
-
-  if (!titleEl) {
-    // Any h1/h2 not in the nav
-    const heads = Array.from(document.querySelectorAll('h1, h2'));
-    titleEl = heads.find(h => !h.closest('nav, header, [class*="nav-v2"]'));
-  }
-
-  if (titleEl && titleEl.parentNode) {
-    titleEl.parentNode.insertBefore(panel, titleEl.nextSibling);
+  // Insert panel after the title heading inside the slider
+  if (insertAfter && insertAfter.parentNode) {
+    insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
   } else {
-    const container = sliderBody || document.querySelector('main') || document.body;
+    // Fallback: prepend to slider or main
+    const container = sliderContent || document.querySelector('main') || document.body;
     container.prepend(panel);
   }
 }
 
-// ─── Route detection + MutationObserver ──────────────────────────────────────
 function onRouteChange() {
   const url = location.href;
   if (/(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(url)) {
