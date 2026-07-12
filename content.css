@@ -1,0 +1,125 @@
+/* ── Upwork Bid Intel — injected styles ── */
+
+/* Compact badge on job cards */
+.ubi-compact {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  background: #17171d !important;
+  border: 1px solid #2a2a35 !important;
+  border-radius: 20px !important;
+  padding: 3px 10px 3px 6px !important;
+  margin: 6px 0 4px !important;
+  cursor: default !important;
+  font-size: 12px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  line-height: 1 !important;
+  text-decoration: none !important;
+}
+
+.ubi-score-dot {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+  flex-shrink: 0 !important;
+}
+
+.ubi-score-num {
+  font-weight: 800 !important;
+  color: #e8e8f0 !important;
+  font-size: 13px !important;
+}
+
+.ubi-grade-text {
+  color: #9090a8 !important;
+  font-size: 11px !important;
+}
+
+/* Detail page panel */
+.ubi-panel {
+  background: #17171d !important;
+  border: 1px solid #2a2a35 !important;
+  border-left: 4px solid #7c6af7 !important;
+  border-radius: 10px !important;
+  padding: 16px 18px !important;
+  margin: 14px 0 !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 13px !important;
+  color: #e8e8f0 !important;
+  box-shadow: 0 4px 20px #0008 !important;
+}
+
+.ubi-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+.ubi-logo { font-size: 18px !important; }
+
+.ubi-title {
+  font-weight: 800 !important;
+  font-size: 14px !important;
+  flex: 1 !important;
+  color: #e8e8f0 !important;
+}
+
+.ubi-score-ring {
+  background: #0f0f13 !important;
+  border: 2px solid var(--score-color, #7c6af7) !important;
+  border-radius: 8px !important;
+  padding: 6px 12px !important;
+  text-align: center !important;
+  min-width: 80px !important;
+}
+
+.ubi-score-big {
+  display: block !important;
+  font-size: 22px !important;
+  font-weight: 900 !important;
+  color: var(--score-color, #7c6af7) !important;
+  line-height: 1 !important;
+}
+
+.ubi-score-label {
+  display: block !important;
+  font-size: 11px !important;
+  color: #9090a8 !important;
+  margin-top: 2px !important;
+}
+
+.ubi-greens {
+  margin-bottom: 8px !important;
+}
+
+.ubi-green-item {
+  font-size: 12px !important;
+  color: #86efac !important;
+  padding: 2px 0 !important;
+}
+
+.ubi-flags {
+  margin-bottom: 8px !important;
+}
+
+.ubi-flag-item {
+  font-size: 12px !important;
+  color: #fbbf24 !important;
+  padding: 2px 0 !important;
+}
+
+.ubi-footer {
+  font-size: 10px !important;
+  color: #5a5a70 !important;
+  border-top: 1px solid #2a2a35 !important;
+  margin-top: 10px !important;
+  padding-top: 8px !important;
+}
+
+.ubi-link {
+  color: #7c6af7 !important;
+  text-decoration: none !important;
+}
+.ubi-link:hover { text-decoration: underline !important; }

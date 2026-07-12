@@ -1,0 +1,49 @@
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f13;--bg2:#17171d;--bg3:#1e1e27;--border:#2a2a35;
+  --accent:#7c6af7;--text:#e8e8f0;--text2:#9090a8;--text3:#5a5a70;
+  --green:#4ade80;--yellow:#fbbf24;--red:#f87171;
+}
+body{width:340px;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px}
+#app{display:flex;flex-direction:column;min-height:200px}
+
+.header{display:flex;align-items:center;gap:10px;padding:12px 14px;
+  background:var(--bg2);border-bottom:1px solid var(--border)}
+.logo{font-size:22px}
+.app-name{font-weight:800;font-size:14px}
+.app-sub{font-size:11px;color:var(--text3)}
+
+/* Score card */
+.score-card{display:flex;gap:14px;padding:14px;align-items:flex-start}
+.score-circle{background:var(--bg3);border:2px solid var(--accent);border-radius:10px;
+  padding:10px 14px;text-align:center;flex-shrink:0;min-width:76px}
+.score-num{font-size:28px;font-weight:900;color:var(--accent);line-height:1}
+.score-grade{font-size:10px;color:var(--text2);margin-top:3px}
+.score-title{font-weight:600;font-size:12px;margin-bottom:8px;color:var(--text2)}
+.flags-list,.green-list{display:flex;flex-direction:column;gap:3px}
+.flag-item{font-size:11px;color:var(--yellow)}
+.green-item{font-size:11px;color:var(--green)}
+
+.verdict{margin:0 14px 14px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.5}
+.verdict strong{color:var(--text)}
+
+/* No job state */
+.no-job{padding:28px 20px;text-align:center}
+.no-job-icon{font-size:36px;margin-bottom:12px}
+.no-job-title{font-weight:700;font-size:14px;margin-bottom:8px}
+.no-job-desc{color:var(--text2);font-size:12px;line-height:1.6;margin-bottom:16px}
+.btn-go{display:inline-block;background:var(--accent);border-radius:7px;color:#fff;
+  font-size:12px;font-weight:700;padding:8px 18px;text-decoration:none}
+.btn-go:hover{background:#9385ff}
+
+/* Stats bar */
+.stats-bar{display:flex;border-top:1px solid var(--border);background:var(--bg2)}
+.stat{flex:1;text-align:center;padding:10px 8px;border-right:1px solid var(--border)}
+.stat:last-child{border-right:none}
+.stat-num{display:block;font-weight:800;font-size:18px;color:var(--accent)}
+.stat-label{display:block;font-size:10px;color:var(--text3);margin-top:2px}
+
+.footer{padding:8px;text-align:center;font-size:10px;color:var(--text3);
+  border-top:1px solid var(--border);background:var(--bg2)}

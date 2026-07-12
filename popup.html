@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Upwork Bid Intel</title>
+  <link rel="stylesheet" href="popup.css"/>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <span class="logo">⚡</span>
+    <div>
+      <div class="app-name">Upwork Bid Intel</div>
+      <div class="app-sub">Stop wasting connects</div>
+    </div>
+  </header>
+
+  <!-- Active job analysis -->
+  <div id="jobPanel" style="display:none">
+    <div class="score-card" id="scoreCard">
+      <div class="score-circle" id="scoreCircle">
+        <div class="score-num" id="scoreNum">—</div>
+        <div class="score-grade" id="scoreGrade">Analysing…</div>
+      </div>
+      <div class="score-details">
+        <div class="score-title" id="jobTitle">Reading job…</div>
+        <div class="flags-list" id="flagsList"></div>
+        <div class="green-list" id="greenList"></div>
+      </div>
+    </div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <!-- Not on Upwork -->
+  <div id="noJobPanel">
+    <div class="no-job">
+      <div class="no-job-icon">🎯</div>
+      <div class="no-job-title">Open any Upwork job</div>
+      <div class="no-job-desc">Go to a job listing or search results — Bid Intel scores it automatically and injects a badge directly onto the page.</div>
+      <a href="https://www.upwork.com/nx/jobs/search/" target="_blank" class="btn-go">Browse Upwork jobs →</a>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar" id="statsBar" style="display:none">
+    <div class="stat"><span class="stat-num" id="statChecked">0</span><span class="stat-label">Checked</span></div>
+    <div class="stat"><span class="stat-num" id="statSkipped">0</span><span class="stat-label">Skipped</span></div>
+    <div class="stat"><span class="stat-num" id="statConnects">0</span><span class="stat-label">Connects saved</span></div>
+  </div>
+
+  <footer class="footer">No account · No tracking · All local</footer>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

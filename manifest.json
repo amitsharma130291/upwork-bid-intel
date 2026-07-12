@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "Upwork Bid Intel",
+  "version": "1.0.0",
+  "description": "Instant job quality score on every Upwork listing. Spot ghost jobs, low-budget traps, and bad clients before you waste your connects.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://www.upwork.com/*",
+    "https://upwork.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.upwork.com/*", "https://upwork.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
