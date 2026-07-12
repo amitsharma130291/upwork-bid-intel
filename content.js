@@ -627,7 +627,7 @@ function processDetailPage() {
 
   // Retry chain: immediate → 600ms → 1400ms → 2500ms → 4000ms → force at 6000ms
   if (!tryInject()) {
-    const delays = [600, 800, 1100, 1500, 2000];
+    const delays = [300, 600, 1000, 1800, 2500];
     let attempt = 0;
     function retry() {
       if (document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`)) return;
@@ -646,10 +646,15 @@ function processDetailPage() {
 function onRouteChange() {
   const url = location.href;
   if (/(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(url)) {
-    setTimeout(processDetailPage, 1000);
-    setTimeout(processCards, 700);
+    // Try cards immediately, then again at 300ms in case React is still rendering
+    processCards();
+    setTimeout(processCards, 300);
+    // Detail panel needs a bit longer for slider DOM to appear
+    setTimeout(processDetailPage, 400);
   } else {
-    setTimeout(processCards, 700);
+    // Try immediately, retry once if cards aren't rendered yet
+    processCards();
+    setTimeout(processCards, 250);
   }
 }
 
@@ -679,7 +684,7 @@ new MutationObserver(() => {
   }
 
   clearTimeout(throttle);
-  throttle = setTimeout(processCards, 500);
+  throttle = setTimeout(processCards, 150);
 }).observe(document.body, { childList: true, subtree: true });
 
 onRouteChange();
