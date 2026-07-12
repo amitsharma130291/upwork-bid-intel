@@ -94,7 +94,7 @@ function scoreJob(data) {
 function extractFromText(text) {
   // ── PAYMENT VERIFICATION ──
   // "Payment verified" vs "Payment unverified"
-  const paymentVerified = /payment\s+verified/i.test(text) && !/payment\s+un/i.test(text);
+  const paymentVerified = /payment\s+(?!un)verified/i.test(text);
 
   // ── JOB AGE ──
   // "Posted 2 weeks ago · Proposals: 5 to 10"
@@ -162,8 +162,9 @@ function extractFromText(text) {
   // ── CLIENT RATING ──
   // Upwork shows numeric rating like "4.9" near stars, or just "0" for no rating
   let clientRating = null;
-  const ratingM = text.match(/\b([4-5]\.\d)\b/);  // 4.x or 5.x — likely a rating
-  if (ratingM) clientRating = parseFloat(ratingM[1]);
+  // Match ratings 1.0-5.9 anchored near a star or 'rating' word, or any x.y in range
+  const ratingM = text.match(/(?:★|\brating\b)[^\d]*(\d\.\d)/i) ?? text.match(/\b([1-5]\.\d)\b/);
+  if (ratingM) clientRating = parseFloat(ratingM[1] ?? ratingM[2]);
 
   // ── DESCRIPTION LENGTH ──
   // Use the whole card text minus noise as a rough quality proxy
@@ -219,19 +220,20 @@ function renderPanel(result) {
 
 // ─── Card processing (search results) ────────────────────────────────────────
 function processCards() {
-  // Upwork job cards — various selectors across Upwork's changing markup
-  const cards = document.querySelectorAll([
-    '[data-test="job-tile"]',
-    '[class*="JobTile"]',
-    '[class*="job-tile"]',
-    'article[class*="job"]',
-    'section[class*="job"]',
-  ].join(','));
+  // Priority-fallback selector prevents ancestor+descendant double-badge.
+  // Use the most specific match first; fall back progressively.
+  let cards = document.querySelectorAll('[data-test="job-tile"]');
+  if (!cards.length) cards = document.querySelectorAll('[class*="JobTile"]');
+  if (!cards.length) cards = document.querySelectorAll('[class*="job-tile"]');
+  if (!cards.length) cards = document.querySelectorAll('article[class*="job"], section[class*="job"]');
 
   cards.forEach(card => {
-    // Skip if already scored
-    if (card.dataset.ubiDone) return;
+    // Skip if this element OR any ancestor is already scored
+    if (card.dataset.ubiDone || card.closest('[data-ubi-done]')) return;
+    // Mark this card AND all its descendants immediately to block races
     card.dataset.ubiDone = '1';
+    card.setAttribute('data-ubi-done', '1');
+    card.querySelectorAll('*').forEach(el => el.dataset.ubiDone = '1');
 
     const text = card.textContent || '';
     const data = extractFromText(text);
@@ -311,9 +313,17 @@ onRouteChange();
 // Popup message
 chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === 'GET_PAGE_DATA') {
-    const data = extractFromText(document.body.textContent);
+    const isDetail = !!location.href.match(/\/jobs\/.*~[0-9a-f]+/i);
+    // On detail pages: read body. On search pages: read only first job card for popup score.
+    let scopeEl = document.body;
+    if (!isDetail) {
+      scopeEl = document.querySelector(
+        '[data-test="job-tile"], [class*="JobTile"], [class*="job-tile"], article[class*="job"]'
+      ) || document.body;
+    }
+    const data = extractFromText(scopeEl.textContent);
     const result = scoreJob(data);
-    sendResponse({ result, isDetail: !!location.href.match(/\/jobs\/.*~[0-9a-f]+/i) });
+    sendResponse({ result, isDetail, multiCard: !isDetail, cardCount: document.querySelectorAll('[data-ubi-done]').length });
   }
   return true;
 });
