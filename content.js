@@ -359,13 +359,11 @@ function renderCompact(result) {
   return badge;
 }
 
-// ─── Detail page panel ────────────────────────────────────────────────────────
+// ─── Detail page panel renderer ──────────────────────────────────────────────
 function renderPanel(result) {
   const { score, grade, color, flags, green } = result;
 
   const panel = document.createElement('div');
-  panel.className = 'ubi-panel';
-  panel.setAttribute('data-ubi', '1');
   panel.style.cssText = [
     'display:flex',
     'align-items:flex-start',
@@ -384,7 +382,7 @@ function renderPanel(result) {
     'box-sizing:border-box',
   ].join('!important;') + '!important';
 
-  // Left score block
+  // Left: score block
   const left = document.createElement('div');
   left.style.cssText = [
     'flex-shrink:0',
@@ -412,58 +410,48 @@ function renderPanel(result) {
   left.appendChild(pillEl);
   panel.appendChild(left);
 
-  // Right content block
+  // Right: content
   const right = document.createElement('div');
   right.style.cssText = 'flex:1!important;padding:14px 16px!important;min-width:0!important;';
 
-  // Header
   const headerRow = document.createElement('div');
-  headerRow.style.cssText = 'display:flex!important;align-items:center!important;gap:8px!important;margin-bottom:10px!important;';
-
+  headerRow.style.cssText = 'display:flex!important;align-items:center!important;gap:6px!important;margin-bottom:8px!important;';
   const logoSpan = document.createElement('span');
-  logoSpan.style.cssText = 'font-size:13px!important;';
   logoSpan.textContent = '⚡';
-
+  logoSpan.style.cssText = 'font-size:13px!important;';
   const titleSpan = document.createElement('span');
-  titleSpan.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#8080a0!important;letter-spacing:0.5px!important;text-transform:uppercase!important;';
   titleSpan.textContent = 'Bid Intel';
-
+  titleSpan.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#8080a0!important;letter-spacing:0.5px!important;text-transform:uppercase!important;';
   headerRow.appendChild(logoSpan);
   headerRow.appendChild(titleSpan);
   right.appendChild(headerRow);
 
-  // Verdict sentence
   const verdEl = document.createElement('div');
-  verdEl.style.cssText = `font-size:14px!important;font-weight:600!important;color:#1a1a2e!important;margin-bottom:10px!important;line-height:1.4!important;`;
+  verdEl.style.cssText = 'font-size:14px!important;font-weight:600!important;color:#1a1a2e!important;margin-bottom:10px!important;line-height:1.4!important;';
   verdEl.textContent = verdictText(score);
   right.appendChild(verdEl);
 
-  // Signal chips
   if (green.length || flags.length) {
     const chipsWrap = document.createElement('div');
     chipsWrap.style.cssText = 'display:flex!important;flex-wrap:wrap!important;gap:5px!important;margin-bottom:10px!important;';
-
     green.forEach(g => {
       const chip = document.createElement('span');
       chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#f0fdf4!important;color:#166534!important;border:1px solid #bbf7d0!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
       chip.textContent = '✓ ' + g;
       chipsWrap.appendChild(chip);
     });
-
     flags.forEach(f => {
       const chip = document.createElement('span');
       chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
       chip.textContent = '! ' + f;
       chipsWrap.appendChild(chip);
     });
-
     right.appendChild(chipsWrap);
   }
 
-  // Footer
   const footEl = document.createElement('div');
   footEl.style.cssText = 'font-size:10px!important;color:#a0a0b8!important;';
-  footEl.textContent = 'All local · No account · Scores update as you browse';
+  footEl.textContent = 'All local · No account · Upwork Bid Intel';
   right.appendChild(footEl);
 
   panel.appendChild(right);
@@ -477,69 +465,31 @@ function hexToRgb(hex) {
   return r+','+g+','+b;
 }
 
-
 // ─── Card processing (search results) ────────────────────────────────────────
-// Track processed jobs by their URL — survives React DOM re-renders
 const processedJobUrls = new Set();
 
 function processCards() {
-  // Upwork split-pane: left = job list, right = preview/detail
-  // Restrict to the LEFT pane only by finding the job list container
-  const listPane = document.querySelector([
-    '[data-test="job-search-results"]',
-    '[data-test="find-work-list"]',
-    '[class*="SearchResults"]',
-    '[class*="search-results"]',
-    '[class*="FindWork"]',
-    '[class*="find-work"]',
-    '[class*="BestMatches"]',
-    '[class*="JobFeed"]',
-    'main [role="list"]',
-    'main',
-  ].join(',')) || document.body;
+  // Use ONLY the stable semantic selector — no broad fallbacks that match non-card elements
+  let cards = Array.from(document.querySelectorAll('[data-test="job-tile"]'));
 
-  // Find job cards — only within the list pane
-  // Selectors cover: search results, Best Matches, My Feed, Contract pages
-  const SELECTORS = [
-    '[data-test="job-tile"]',
-    '[data-test="UpCGrid-col"] article',
-    '[class*="JobTile"]:not([class*="Preview"]):not([class*="Detail"])',
-    '[class*="job-tile"]:not([class*="preview"])',
-    '[class*="BestMatch"]',
-    '[class*="best-match"]',
-    '[class*="feed-job"]',
-    'article[data-ev-label]',
-  ];
-
-  let rawCards = [];
-  for (const sel of SELECTORS) {
-    const found = listPane.querySelectorAll(sel);
-    if (found.length) { rawCards = Array.from(found); break; }
+  // Single specific fallback if primary finds nothing (Best Matches uses different markup)
+  if (!cards.length) {
+    cards = Array.from(document.querySelectorAll('[class*="JobTile"]'))
+      .filter(el => el.querySelector('h2, h3') && !el.closest('[class*="Preview"]'));
   }
 
-  // Broad fallback: any article or li that contains a job link
-  if (!rawCards.length) {
-    const candidates = Array.from(listPane.querySelectorAll('article, li, section'));
-    rawCards = candidates.filter(el =>
-      el.querySelector('a[href*="/jobs/"], a[href*="job_uid"]') &&
-      el.textContent.length > 100
-    );
-  }
-
-  // Remove descendants — keep only the outermost card element
-  const cards = rawCards.filter(c => !rawCards.some(o => o !== c && o.contains(c)));
+  // Remove descendants — keep only outermost card element
+  cards = cards.filter(c => !cards.some(o => o !== c && o.contains(c)));
 
   cards.forEach(card => {
-    // Get the job URL as a stable unique key
-    const link = card.querySelector('a[href*="/jobs/"]') || card.querySelector('a[href*="job_uid"]');
-    const jobKey = link ? (link.href || link.getAttribute('href') || '') : '';
+    // Dedup by job URL — survives React re-renders that wipe data attributes
+    const link = card.querySelector('a[href*="/jobs/"]');
+    const href = link ? (link.getAttribute('href') || '') : '';
+    const jobKey = href.split('?')[0];
 
-    // Use URL-based dedup — survives React re-renders that wipe DOM attributes
     if (jobKey && processedJobUrls.has(jobKey)) return;
-    // Also check DOM attribute as secondary guard
     if (card.dataset.ubiDone) return;
 
-    // Mark immediately
     if (jobKey) processedJobUrls.add(jobKey);
     card.dataset.ubiDone = '1';
 
@@ -549,91 +499,79 @@ function processCards() {
     const badge = renderCompact(result);
 
     const wrapper = document.createElement('div');
-    wrapper.dataset.ubiBadge = '1';
-    wrapper.style.cssText = 'margin:4px 0 2px!important;line-height:1!important;display:block!important;';
+    wrapper.setAttribute('data-ubi-badge', '1');
+    wrapper.style.cssText = 'display:block!important;margin:4px 0 2px!important;padding:0!important;clear:both!important;';
     wrapper.appendChild(badge);
 
-    // Insert badge after the job title row
-    // Works for both search results (h2) and Best Matches / My Feed (h3, strong, etc.)
-    const titleEl = card.querySelector('h2, h3, [class*="title"] a, [class*="JobTitle"]');
-    if (titleEl) {
-      // Walk up to find the direct child of card containing the title
-      let titleRow = titleEl;
-      while (titleRow.parentElement && titleRow.parentElement !== card) {
-        titleRow = titleRow.parentElement;
-      }
-      // Guard: don't insert if a badge already exists after this row
-      if (!titleRow.nextSibling?.dataset?.ubiBadge) {
-        card.insertBefore(wrapper, titleRow.nextSibling);
+    // Insert immediately after the h2/h3 element — no ancestor walk-up
+    const h = card.querySelector('h2') || card.querySelector('h3');
+    if (h && h.parentNode) {
+      if (h.nextSibling) {
+        h.parentNode.insertBefore(wrapper, h.nextSibling);
+      } else {
+        h.parentNode.appendChild(wrapper);
       }
     } else {
-      // No title — put badge at the top of the card
-      if (!card.firstChild?.dataset?.ubiBadge) {
-        card.insertBefore(wrapper, card.firstChild);
-      }
+      card.appendChild(wrapper);
     }
   });
 }
-// ─── Detail page ──────────────────────────────────────────────────────────────
+
+// ─── Detail page / slider panel ──────────────────────────────────────────────
 function processDetailPage() {
   const JOB_DETAIL_RE = /(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i;
   const urlMatch = location.href.match(JOB_DETAIL_RE);
   if (!urlMatch) return;
-  if (document.querySelector('[data-ubi-panel]')) return;
 
-  const jobUid = urlMatch[1]; // e.g. "022075..."
+  // Remove any stale panel from a previous navigation before re-scoring
+  const stale = document.querySelector('[data-ubi-panel]');
+  if (stale) stale.remove();
 
-  // ── Strategy 1: find the matching background card by job URL ──
-  // This guarantees the slider scores IDENTICALLY to the list badge.
-  // The card's link href contains the same UID.
-  const matchingCard = Array.from(
-    document.querySelectorAll('a[href*="/jobs/"], a[href*="/details/"]')
-  ).find(a => (a.href || a.getAttribute('href') || '').includes(jobUid))
-   ?.closest('[data-ubi-done], article, li, section');
+  const jobUid = urlMatch[1];
 
+  // ── Strategy 1: reuse the exact card text the badge already scored ──
+  // Guarantees card badge == slider panel score
   let text = '';
+  const cardLink = Array.from(
+    document.querySelectorAll('a[href*="/jobs/"], a[href*="/details/"]')
+  ).find(a => (a.getAttribute('href') || '').includes(jobUid));
 
-  if (matchingCard) {
-    // Use exact same text the badge used
-    text = matchingCard.textContent || '';
-  } else {
-    // ── Strategy 2: find the slider pane and scope to it only ──
-    // Try selectors that match ONLY the slider/modal content,
-    // not the background list.
-    const SLIDER_SELECTORS = [
+  const card = cardLink?.closest('[data-test="job-tile"], [data-ubi-done], article');
+  if (card) {
+    text = card.textContent || '';
+  }
+
+  // ── Strategy 2: scope to the slider/modal container ──
+  if (!text) {
+    const SLIDER = [
       '[role="dialog"]',
       '[role="complementary"]',
-      '[class*="slider"][class*="panel" i]',
+      '[class*="slider" i][class*="panel" i]',
       '[class*="SliderPanel"]',
-      '[class*="ModalSlider"]',
-      '[class*="JobDetails"][class*="modal" i]',
-      '[class*="job-details"][class*="panel" i]',
-    ];
-    const sliderEl = document.querySelector(SLIDER_SELECTORS.join(','));
+      '[class*="ModalContent"]',
+      '[class*="DetailView"]',
+    ].join(',');
+    const sliderEl = document.querySelector(SLIDER);
+    if (sliderEl) text = sliderEl.textContent || '';
+  }
 
-    if (sliderEl) {
-      text = sliderEl.textContent || '';
-    } else {
-      // ── Strategy 3: reconstruct from visible slider h1 area ──
-      // Find the h1 title and take a generous slice of surrounding text
-      const h1 = document.querySelector('h1');
-      if (h1) {
-        // Walk up 3 levels to get the panel wrapper
-        let el = h1;
-        for (let i = 0; i < 4 && el.parentElement; i++) el = el.parentElement;
-        text = el.textContent || '';
-      } else {
-        text = document.body.textContent || '';
-      }
+  // ── Strategy 3: walk up from h1 to find the panel wrapper ──
+  if (!text) {
+    let el = document.querySelector('h1');
+    if (el) {
+      for (let i = 0; i < 5 && el.parentElement; i++) el = el.parentElement;
+      text = el.textContent || '';
     }
   }
+
+  if (!text) return; // nothing to score
 
   const data = extractFromText(text);
   const result = scoreJob(data);
   const panel = renderPanel(result);
   panel.setAttribute('data-ubi-panel', '1');
 
-  // Insert after h1 in the slider/modal
+  // Insert after the h1 in the slider
   const h1 = document.querySelector(
     '[role="dialog"] h1, [role="complementary"] h1, main h1, h1'
   );
@@ -642,7 +580,6 @@ function processDetailPage() {
   } else {
     const main = document.querySelector('main, [role="main"]');
     if (main) main.prepend(panel);
-    else document.body.prepend(panel);
   }
 }
 
