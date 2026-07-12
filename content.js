@@ -504,159 +504,99 @@ function processCards() {
 
 // ─── Slider / detail page ─────────────────────────────────────────────────────
 function processDetailPage() {
+  // Works for both /details/~uid (slider) and plain /jobs/~uid (full page)
   const m = location.href.match(/(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i);
-  const hasSlider = !!(document.querySelector('.job-details-content') || document.querySelector('.job-details-card') || Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')));
-  // Upwork sometimes opens the job modal without changing the URL.
-  // If the slider exists, score it even when /details/~uid is absent.
-  if (!m && !hasSlider) return;
+  const jobUid = m ? m[1].replace(/^0+/, '') : null; // strip leading zeros
+
+  // Find the modal/slider container — the air3-card-sections that has an h4
+  function getSlider() {
+    return document.querySelector('.job-details-content') ||
+           document.querySelector('.job-details-card') ||
+           Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
+           null;
+  }
+
+  // Check slider exists AND belongs to the current job (job-uid attr must match if present)
+  function sliderIsReady() {
+    const s = getSlider();
+    if (!s) return false;
+    if (jobUid) {
+      const uidEl = s.querySelector('[job-uid]');
+      if (uidEl) {
+        const domUid = uidEl.getAttribute('job-uid').replace(/^0+/, '');
+        if (domUid && domUid !== jobUid) return false; // still the old job
+      }
+    }
+    return s;
+  }
+
+  // Check client section is present (payment/rating/spend/hires)
+  function clientIsReady(slider) {
+    const txt = slider.textContent || '';
+    return /payment\s+(un)?verified/i.test(txt) ||
+           /spent/i.test(txt) ||
+           /\d+\s+(?:hires|reviews?)/i.test(txt);
+  }
 
   const currentUrl = location.href.split('?')[0];
 
-  // Remove panels stamped for a DIFFERENT URL (stale), keep panels for current URL
-  document.querySelectorAll('[data-ubi-panel]').forEach(el => {
-    if (el.getAttribute('data-ubi-url') !== currentUrl) el.remove();
-  });
+  function inject(slider, forced) {
+    // Collect text: slider content + about-client sidebar (if separate)
+    const sidebarEl = document.querySelector('[data-test="about-client-container"], .cfe-ui-job-about-client');
+    const sidebarInSlider = slider.contains(sidebarEl);
+    const sliderText = slider.textContent || '';
+    const clientText = (sidebarEl && !sidebarInSlider) ? sidebarEl.textContent : '';
+    const text = sliderText + (clientText ? '\n' + clientText : '');
 
-  const jobUid = m ? m[1] : null;
-
-  function tryInject(force) {
-    // Already injected for this exact URL?
-    const existing = document.querySelector('[data-ubi-panel]');
-    if (existing && existing.getAttribute('data-ubi-url') === currentUrl) return true;
-    if (existing) existing.remove(); // wrong URL — remove and re-score
-
-    let text = '';
-    let insertAfter = null;
-
-    // ── Strategy 1: find the job detail container ──
-    // Two cases:
-    // A) Full detail page (/details/~uid or /jobs/~uid URL) — client info is
-    //    in a separate sidebar column, outside air3-card-sections. Use full
-    //    page text but find the card container only for the insertion point.
-    // B) Slider overlay (no URL change) — the ENTIRE modal content is inside
-    //    air3-card-sections, so scoped text is correct.
-    //
-    // CRITICAL: when the slider is open the full page has MANY .air3-card-sections
-    // (one per list card). The modal one uniquely contains an h4.
-
-    const isFullDetailPage = /(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(location.href);
-
-    let sliderContent =
-      document.querySelector('.job-details-content') ||
-      document.querySelector('.job-details-card') ||
-      Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
-      null;
-
-    // ── Stale slider guard ──
-    // Check job-uid attribute in the slider matches the URL uid (both decimal, strip leading zeros)
-    if (sliderContent && jobUid) {
-      const uidEl = sliderContent.querySelector('[job-uid]');
-      if (uidEl) {
-        const domUid = uidEl.getAttribute('job-uid');
-        const urlUidStripped = jobUid.replace(/^0+/, '');
-        // Only block if UIDs are present AND clearly different
-        // (some jobs may not have job-uid attribute — don't block those)
-        if (domUid && urlUidStripped && domUid !== urlUidStripped) return false;
-      }
-    }
-
-    if (sliderContent) {
-      if (isFullDetailPage) {
-        // Full page: job signals (rate, proposals, age) are in the card container,
-        // but client signals (spend, rating, hires, payment) are in the sidebar.
-        // Combine both: card text + sidebar text, but NOT the full job list on the left.
-        const sidebarEl = document.querySelector('[data-test="about-client-container"], .cfe-ui-job-about-client');
-        const jobText = sliderContent.textContent || '';
-        const clientText = sidebarEl ? sidebarEl.textContent : (document.body.textContent || '');
-        text = jobText + '\n' + clientText;
-      } else {
-        // Slider overlay: everything is inside the modal container
-        text = sliderContent.textContent || '';
-      }
-      const titleEl = sliderContent.querySelector('h4, h2, h1');
-      if (titleEl) insertAfter = titleEl;
-    }
-
-    // ── Strategy 2: matching background card text ──
-    if (!text) {
-      const cardLink = jobUid ? Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
-        .find(a => (a.getAttribute('href') || '').includes(jobUid)) : null;
-      const card = cardLink?.closest('section.air3-card-section, [data-ubi-done], article');
-      if (card) text = card.textContent || '';
-    }
-
-    // ── Strategy 3: any heading not in nav ──
-    if (!text) {
-      const heading = Array.from(document.querySelectorAll('h4, h3, h2, h1'))
-        .find(h => !h.closest('nav, header'));
-      if (heading) {
-        let el = heading;
-        while (el.parentElement && !['section','main','body'].includes(el.tagName.toLowerCase())) {
-          el = el.parentElement;
-        }
-        text = el.textContent || '';
-        if (!insertAfter) insertAfter = heading;
-      }
-    }
-
-    if (!text || text.trim().length < 30) return false; // signal: not ready yet
-
-    // ── Wait for client section to be present ──
-    // If "About the client" hasn't loaded yet, the score will be missing
-    // payment/rating/spend/hires data and will look artificially high.
-    // Check that at least one client signal is visible before we inject.
-    // Wait for client section to be present before scoring
-    // (it loads async and without it we get an artificially high score)
-    // Wait for the client section to actually be in the DOM.
-    // IMPORTANT: do NOT check document.body.textContent — it always has "spent/hires"
-    // from the 30 job cards in the left panel, causing instant false-positive.
-    let hasClientSection = false;
-    if (isFullDetailPage) {
-      // On full detail pages the client info is in its own sidebar element.
-      // Only pass when that element is actually present in the DOM.
-      const sidebarCheck = document.querySelector('[data-test="about-client-container"], .cfe-ui-job-about-client');
-      hasClientSection = !!sidebarCheck;
-    } else {
-      // Slider overlay: client section is inside the modal container itself.
-      hasClientSection = sliderContent && (
-        /payment\s+(un)?verified/i.test(text) ||
-        /spent/i.test(text) ||
-        /hires/i.test(text) ||
-        /\d+\s+reviews?/i.test(text)
-      );
-    }
-    if (!hasClientSection && !force) return false; // client block still loading — retry
+    if (!text || text.trim().length < 50) return false;
 
     const data = extractFromText(text);
     const result = scoreJob(data);
     const panel = renderPanel(result);
     panel.setAttribute('data-ubi-panel', '1');
-    panel.setAttribute('data-ubi-url', currentUrl); // stamp with URL to detect stale later
+    panel.setAttribute('data-ubi-url', currentUrl);
 
-    if (insertAfter && insertAfter.parentNode) {
-      insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
+    // Insert after the h4 title, inside the slider
+    const titleEl = slider.querySelector('h4, h2, h1');
+    if (titleEl && titleEl.parentNode) {
+      titleEl.parentNode.insertBefore(panel, titleEl.nextSibling);
     } else {
-      const container = document.querySelector('.job-details-content') || Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) || document.querySelector('main') || document.body;
-      container.prepend(panel);
+      slider.prepend(panel);
     }
-    return true; // signal: success
+    return true;
   }
 
-  // Retry chain: 500ms → 1200ms → 2200ms → 3500ms → 5500ms
-  // Last attempt forces inject even without client section (better partial than nothing)
+  // Attempt injection — returns true on success, false to retry
+  function tryInject(force) {
+    // Already done for this URL?
+    if (document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`)) return true;
+    // Remove any stale panel from a different URL
+    document.querySelectorAll('[data-ubi-panel]').forEach(el => el.remove());
+
+    const slider = sliderIsReady();
+    if (!slider) return false;
+
+    const hasClient = clientIsReady(slider);
+    if (!hasClient && !force) return false;
+
+    return inject(slider, force);
+  }
+
+  // Retry chain: immediate → 600ms → 1400ms → 2500ms → 4000ms → force at 6000ms
   if (!tryInject()) {
-    setTimeout(() => { if (!tryInject()) {
-      setTimeout(() => { if (!tryInject()) {
-        setTimeout(() => { if (!tryInject()) {
-          // Final fallback: force inject with whatever data is available
-          setTimeout(() => {
-            if (!document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`)) {
-              tryInject(true); // force=true skips client section wait
-            }
-          }, 2000);
-        }}, 1300);
-      }}, 1000);
-    }}, 700);
+    const delays = [600, 800, 1100, 1500, 2000];
+    let attempt = 0;
+    function retry() {
+      if (document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`)) return;
+      const isLast = attempt >= delays.length;
+      if (!tryInject(isLast)) {
+        if (!isLast) {
+          attempt++;
+          setTimeout(retry, delays[attempt - 1]);
+        }
+      }
+    }
+    setTimeout(retry, delays[0]);
   }
 }
 
