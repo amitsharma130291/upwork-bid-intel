@@ -8,10 +8,11 @@
 function scoreJob(d) {
   let score = 100;
   // Each flag/green is {text, pts} where pts is the point change (negative = deduction, 0 = neutral good)
-  const flags = [], green = [];
+  const flags = [], green = [], info = [];
 
   function addFlag(text, pts) { score -= pts; flags.push({ text, pts }); }
-  function addGreen(text)     { green.push({ text, pts: 0 }); }
+  function addGreen(text)     { green.push({ text }); }
+  function addInfo(text)      { info.push({ text }); }
 
   // ── CLIENT RATING ──
   if (d.clientRating !== null && d.clientRating > 0) {
@@ -71,17 +72,17 @@ function scoreJob(d) {
   const rateLabel = d.avgHourlyPaid !== null ? 'avg paid $' + d.avgHourlyPaid + '/hr' : '~$' + d.hourlyMid + '/hr';
   if (effectiveRate !== null) {
     if (effectiveRate < 10)       addFlag(rateLabel + ' — race to bottom', 25);
-    else if (effectiveRate < 20)  addFlag('Pays ' + rateLabel + ' on avg — low', 15);
-    else if (effectiveRate < 30)  addFlag('Pays ' + rateLabel + ' on avg', 5);
-    else if (effectiveRate >= 60) addGreen('Pays ' + rateLabel + ' — strong 💰');
-    else if (effectiveRate >= 40) addGreen('Pays ' + rateLabel + ' — good');
-    else                          addGreen('Pays ' + rateLabel);
+    else if (effectiveRate < 15)  addFlag('Pays ' + rateLabel + ' — very low', 20);
+    else if (effectiveRate < 25)  addFlag('Pays ' + rateLabel + ' — below market', 10);
+    else if (effectiveRate >= 70) addGreen('Pays ' + rateLabel + ' — strong 💰');
+    else if (effectiveRate >= 50) addGreen('Pays ' + rateLabel + ' — good');
+    else                          addGreen('Pays ' + rateLabel); // $25–$69: positive, no deduction
     // Note when avg paid is lower than posted range
     if (d.avgHourlyPaid !== null && d.hourlyMid !== null && d.avgHourlyPaid < d.hourlyMid - 5) {
       const postedRange = (d.hourlyLow && d.hourlyHigh)
         ? '$' + d.hourlyLow + '–$' + d.hourlyHigh
         : '$' + d.hourlyMid;
-      addFlag('Posted ' + postedRange + '/hr but pays $' + d.avgHourlyPaid + '/hr avg', 0);
+      addInfo('Posted ' + postedRange + '/hr but pays $' + d.avgHourlyPaid + '/hr avg');
     }
   }
 
@@ -104,7 +105,7 @@ function scoreJob(d) {
   else if (score >= 25) { grade = 'Poor';      color = '#dc2626'; }
   else                  { grade = 'Skip';      color = '#7f1d1d'; }
 
-  return { score, grade, color, flags, green };
+  return { score, grade, color, flags, green, info };
 }
 function verdictText(score) {
   if (score >= 80) return 'Strong signals — apply with confidence.';
@@ -217,7 +218,7 @@ function removeTooltip() {
 }
 
 function renderBadge(result) {
-  const { score, grade, color, flags, green } = result;
+  const { score, grade, color, flags, green, info = [] } = result;
   const bg = color + '18';
 
   const badge = document.createElement('span');
@@ -296,6 +297,12 @@ function renderBadge(result) {
           '<span style="flex-shrink:0;opacity:0.7;font-size:10px;padding-left:6px">−' + f.pts + ' pts</span>';
         sig.appendChild(r);
       });
+      (info || []).forEach(item => {
+        const r = document.createElement('div');
+        r.style.cssText = 'font-size:10px!important;color:#93c5fd!important;line-height:1.4!important;padding-top:2px!important;';
+        r.textContent = 'ℹ ' + item.text;
+        sig.appendChild(r);
+      });
       tip.appendChild(sig);
     }
 
@@ -334,7 +341,7 @@ function renderBadge(result) {
 
 // ─── Detail panel ─────────────────────────────────────────────────────────────
 function renderPanel(result) {
-  const { score, grade, color, flags, green } = result;
+  const { score, grade, color, flags, green, info = [] } = result;
   const panel = document.createElement('div');
   panel.setAttribute('data-ubi-panel', '1');
   panel.style.cssText = `display:flex!important;align-items:stretch!important;background:#fff!important;` +
@@ -420,6 +427,15 @@ function renderPanel(result) {
   fr.textContent = score;
   finalRow.appendChild(fl); finalRow.appendChild(fr);
   table.appendChild(finalRow);
+
+  // Info rows — zero-point notes, shown below final score in muted blue
+  info.forEach(item => {
+    const infoRow = document.createElement('div');
+    infoRow.style.cssText = 'font-size:10px!important;color:#4f7ac7!important;padding:3px 0 0!important;';
+    infoRow.textContent = 'ℹ ' + item.text;
+    table.appendChild(infoRow);
+  });
+
   R.appendChild(table);
 
   const foot = document.createElement('div');
