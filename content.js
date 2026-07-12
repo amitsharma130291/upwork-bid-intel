@@ -481,17 +481,28 @@ function processCards() {
   // Restrict to the LEFT pane only by finding the job list container
   const listPane = document.querySelector([
     '[data-test="job-search-results"]',
+    '[data-test="find-work-list"]',
     '[class*="SearchResults"]',
     '[class*="search-results"]',
+    '[class*="FindWork"]',
+    '[class*="find-work"]',
+    '[class*="BestMatches"]',
+    '[class*="JobFeed"]',
     'main [role="list"]',
     'main',
   ].join(',')) || document.body;
 
   // Find job cards — only within the list pane
+  // Selectors cover: search results, Best Matches, My Feed, Contract pages
   const SELECTORS = [
     '[data-test="job-tile"]',
-    '[class*="JobTile"]:not([class*="Preview"])',
-    '[class*="job-tile"]',
+    '[data-test="UpCGrid-col"] article',
+    '[class*="JobTile"]:not([class*="Preview"]):not([class*="Detail"])',
+    '[class*="job-tile"]:not([class*="preview"])',
+    '[class*="BestMatch"]',
+    '[class*="best-match"]',
+    '[class*="feed-job"]',
+    'article[data-ev-label]',
   ];
 
   let rawCards = [];
@@ -500,9 +511,13 @@ function processCards() {
     if (found.length) { rawCards = Array.from(found); break; }
   }
 
-  // Fallback: any article/section in the list pane
+  // Broad fallback: any article or li that contains a job link
   if (!rawCards.length) {
-    rawCards = Array.from(listPane.querySelectorAll('article, section[class*="job"]'));
+    const candidates = Array.from(listPane.querySelectorAll('article, li, section'));
+    rawCards = candidates.filter(el =>
+      el.querySelector('a[href*="/jobs/"], a[href*="job_uid"]') &&
+      el.textContent.length > 100
+    );
   }
 
   // Remove descendants — keep only the outermost card element
@@ -532,19 +547,24 @@ function processCards() {
     wrapper.style.cssText = 'margin:4px 0 2px!important;line-height:1!important;display:block!important;';
     wrapper.appendChild(badge);
 
-    // Insert after the job title (h2 or h3)
-    // Upwork wraps titles in h2 > a — find that and insert after its parent row
-    const h2 = card.querySelector('h2, h3');
-    if (h2) {
-      // Walk up to find the direct child of the card that contains the title
-      let titleRow = h2;
+    // Insert badge after the job title row
+    // Works for both search results (h2) and Best Matches / My Feed (h3, strong, etc.)
+    const titleEl = card.querySelector('h2, h3, [class*="title"] a, [class*="JobTitle"]');
+    if (titleEl) {
+      // Walk up to find the direct child of card containing the title
+      let titleRow = titleEl;
       while (titleRow.parentElement && titleRow.parentElement !== card) {
         titleRow = titleRow.parentElement;
       }
-      card.insertBefore(wrapper, titleRow.nextSibling);
+      // Guard: don't insert if a badge already exists after this row
+      if (!titleRow.nextSibling?.dataset?.ubiBadge) {
+        card.insertBefore(wrapper, titleRow.nextSibling);
+      }
     } else {
-      // No title found — append to card
-      card.appendChild(wrapper);
+      // No title — put badge at the top of the card
+      if (!card.firstChild?.dataset?.ubiBadge) {
+        card.insertBefore(wrapper, card.firstChild);
+      }
     }
   });
 }
