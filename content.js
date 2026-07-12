@@ -134,12 +134,14 @@ function extractFromText(text) {
 
   // Proposals
   let proposalsMid = null;
-  // Use \bproposals\s*: (plural + colon) to avoid matching
-  // "Required Connects to submit a proposal: 27" as 27 proposals
-  const pp = text.match(/\bproposals\s*:\s*50\+/i);
-  const pr = text.match(/\bproposals\s*:\s*(\d+)\s+to\s+(\d+)/i);
-  const pl = text.match(/\bproposals\s*:\s*(?:less|fewer)\s+than\s+(\d+)/i);
-  const ps = text.match(/\bproposals\s*:\s*(\d+)/i);
+  // Anchor to "Activity on this job" section — immune to connects-cost lines
+  // and future Upwork wording changes around proposals elsewhere on the page.
+  const activityM = text.match(/activity\s+on\s+this\s+job([\s\S]{0,500})/i);
+  const propScope = activityM ? activityM[1] : text;
+  const pp = propScope.match(/\bproposals\s*[:\s]+50\+/i);
+  const pr = propScope.match(/\bproposals\s*[:\s]+(\d+)\s+to\s+(\d+)/i);
+  const pl = propScope.match(/\bproposals\s*[:\s]+(?:less|fewer)\s+than\s+(\d+)/i);
+  const ps = propScope.match(/\bproposals\s*[:\s]+(\d+)/i);
   if (pp) proposalsMid = 50;
   else if (pr) proposalsMid = Math.round((+pr[1] + +pr[2]) / 2);
   else if (pl) proposalsMid = Math.round(+pl[1] / 2);
