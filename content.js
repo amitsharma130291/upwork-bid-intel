@@ -1,638 +1,456 @@
 /**
- * Upwork Bid Intel v1.1 — Content Script
- * Fixed: regex patterns match Upwork's actual DOM text
- * Fixed: duplicate badge prevention via data attribute
+ * Upwork Bid Intel v2.0 — Simplified, reliable injection
+ * Strategy: anchor on job title links (h2/h3 > a[href*="/jobs/"]) — the ONE
+ * stable element on every Upwork page. No guessing at card class names.
  */
 
 // ─── Scoring engine ───────────────────────────────────────────────────────────
-function scoreJob(data) {
+function scoreJob(d) {
   let score = 100;
-  const flags = [];
-  const green = [];
+  const flags = [], green = [];
 
-  // ── CLIENT RATING ──
-  if (data.clientRating !== null && data.clientRating > 0) {
-    if (data.clientRating >= 4.7)      green.push('Top-rated client (' + data.clientRating + '⭐)');
-    else if (data.clientRating >= 4.0) green.push('Good client rating (' + data.clientRating + ')');
-    else if (data.clientRating < 3.5)  { score -= 25; flags.push('Low client rating: ' + data.clientRating); }
-    else                               { score -= 10; flags.push('Below-avg client rating: ' + data.clientRating); }
+  // Client rating
+  if (d.clientRating !== null && d.clientRating > 0) {
+    if (d.clientRating >= 4.7)      green.push('Top-rated client (' + d.clientRating + '★)');
+    else if (d.clientRating >= 4.0) green.push('Good client rating (' + d.clientRating + ')');
+    else if (d.clientRating < 3.5)  { score -= 25; flags.push('Low client rating: ' + d.clientRating); }
+    else                            { score -= 10; flags.push('Below-avg client rating: ' + d.clientRating); }
   } else {
-    score -= 20;
-    flags.push('No client rating — never hired on Upwork');
+    score -= 15; flags.push('No client rating — new to Upwork');
   }
 
-  // ── CLIENT HIRES ──
-  if (data.clientHires !== null) {
-    if (data.clientHires === 0)       { score -= 15; flags.push('Client has 0 hires ever'); }
-    else if (data.clientHires >= 10)  green.push(data.clientHires + ' total hires');
-    else if (data.clientHires >= 3)   green.push(data.clientHires + ' hires');
+  // Hires
+  if (d.clientHires !== null) {
+    if (d.clientHires === 0)      { score -= 10; flags.push('0 hires ever'); }
+    else if (d.clientHires >= 10) green.push(d.clientHires + ' total hires');
   }
 
-  // ── CLIENT SPEND ──
-  if (data.clientSpend !== null) {
-    if (data.clientSpend === 0)           { score -= 10; flags.push('$0 spent — brand new account'); }
-    else if (data.clientSpend >= 10000)   green.push('$' + (data.clientSpend/1000).toFixed(0) + 'k+ spent on Upwork');
-    else if (data.clientSpend >= 1000)    green.push('$' + (data.clientSpend/1000).toFixed(1) + 'k spent');
-    else if (data.clientSpend < 100)      { score -= 5; flags.push('Client spent <$100 total'); }
+  // Spend
+  if (d.clientSpend !== null) {
+    if (d.clientSpend >= 10000)   green.push('$' + (d.clientSpend/1000).toFixed(0) + 'k+ spent');
+    else if (d.clientSpend >= 1000) green.push('$' + (d.clientSpend/1000).toFixed(1) + 'k spent');
+    else if (d.clientSpend === 0) { score -= 10; flags.push('$0 spent — brand new account'); }
   }
 
-  // ── PAYMENT VERIFICATION ──
-  if (data.paymentVerified === false)     { score -= 20; flags.push('Payment NOT verified ⚠️'); }
-  else if (data.paymentVerified === true) green.push('Payment verified ✓');
+  // Payment verified
+  if (d.paymentVerified === false)     { score -= 20; flags.push('Payment NOT verified'); }
+  else if (d.paymentVerified === true) green.push('Payment verified ✓');
 
-  // ── JOB AGE ──
-  if (data.daysPosted !== null) {
-    if (data.daysPosted > 60)      { score -= 30; flags.push('Posted ' + data.daysPosted + ' days ago — very stale'); }
-    else if (data.daysPosted > 30) { score -= 20; flags.push('Posted ' + data.daysPosted + ' days ago — likely stale'); }
-    else if (data.daysPosted > 14) { score -= 8;  flags.push('Posted ' + data.daysPosted + ' days ago'); }
-    else if (data.daysPosted <= 1) green.push('Posted today — very fresh');
-    else if (data.daysPosted <= 3) green.push('Posted ' + data.daysPosted + ' days ago — fresh');
+  // Job age
+  if (d.daysPosted !== null) {
+    if (d.daysPosted > 60)      { score -= 30; flags.push('Posted ' + d.daysPosted + 'd ago — very stale'); }
+    else if (d.daysPosted > 30) { score -= 20; flags.push('Posted ' + d.daysPosted + 'd ago — stale'); }
+    else if (d.daysPosted > 14) { score -= 8;  flags.push('Posted ' + d.daysPosted + 'd ago'); }
+    else if (d.daysPosted <= 1) green.push('Fresh — posted today');
+    else if (d.daysPosted <= 3) green.push('Posted ' + d.daysPosted + 'd ago');
   }
 
-  // ── PROPOSALS (competition) ──
-  if (data.proposalsMid !== null) {
-    if (data.proposalsMid >= 50)      { score -= 20; flags.push('50+ proposals — very crowded'); }
-    else if (data.proposalsMid >= 25) { score -= 10; flags.push(data.proposalsMid + '± proposals — competitive'); }
-    else if (data.proposalsMid <= 5)  green.push('Only ~' + data.proposalsMid + ' proposals — low competition 🎯');
-    else                              green.push('~' + data.proposalsMid + ' proposals');
+  // Proposals (competition)
+  if (d.proposalsMid !== null) {
+    if (d.proposalsMid >= 50)      { score -= 20; flags.push('50+ proposals — very crowded'); }
+    else if (d.proposalsMid >= 25) { score -= 10; flags.push(d.proposalsMid + ' proposals'); }
+    else if (d.proposalsMid <= 5)  green.push('Only ~' + d.proposalsMid + ' proposals 🎯');
+    else                           green.push('~' + d.proposalsMid + ' proposals');
   }
 
-  // ── BUDGET ──
-  if (data.hourlyMid !== null) {
-    if (data.hourlyMid < 10)      { score -= 25; flags.push('Rate $' + data.hourlyMid + '/hr — race to bottom'); }
-    else if (data.hourlyMid < 20) { score -= 10; flags.push('Low rate: ~$' + data.hourlyMid + '/hr'); }
-    else if (data.hourlyMid >= 50) green.push('Strong rate: ~$' + data.hourlyMid + '/hr 💰');
-    else                           green.push('Rate: ~$' + data.hourlyMid + '/hr');
+  // Hourly rate
+  if (d.hourlyMid !== null) {
+    if (d.hourlyMid < 10)      { score -= 25; flags.push('$' + d.hourlyMid + '/hr — too low'); }
+    else if (d.hourlyMid < 20) { score -= 10; flags.push('Low rate: ~$' + d.hourlyMid + '/hr'); }
+    else if (d.hourlyMid >= 50) green.push('Good rate: ~$' + d.hourlyMid + '/hr');
   }
 
-  if (data.fixedBudget !== null) {
-    if (data.fixedBudget < 50)       { score -= 20; flags.push('Fixed budget <$50 — not worth it'); }
-    else if (data.fixedBudget < 200) { score -= 5;  flags.push('Low fixed budget: $' + data.fixedBudget); }
-    else if (data.fixedBudget >= 500) green.push('Good budget: $' + data.fixedBudget + ' 💰');
-    else                              green.push('Budget: $' + data.fixedBudget);
-  }
-
-  // ── DESCRIPTION QUALITY ──
-  if (data.descLength !== null) {
-    if (data.descLength < 80)       { score -= 20; flags.push('Vague job description — lazy client'); }
-    else if (data.descLength >= 400) green.push('Detailed description');
+  // Fixed budget
+  if (d.fixedBudget !== null && d.hourlyMid === null) {
+    if (d.fixedBudget < 50)       { score -= 20; flags.push('Budget <$50 — skip'); }
+    else if (d.fixedBudget >= 500) green.push('Budget: $' + d.fixedBudget);
   }
 
   score = Math.max(0, Math.min(100, score));
 
-  let grade, color, emoji;
-  if (score >= 80)      { grade = 'Excellent'; color = '#22c55e'; emoji = '🟢'; }
-  else if (score >= 65) { grade = 'Good';      color = '#84cc16'; emoji = '🟡'; }
-  else if (score >= 45) { grade = 'Risky';     color = '#f59e0b'; emoji = '🟠'; }
-  else if (score >= 25) { grade = 'Poor';      color = '#ef4444'; emoji = '🔴'; }
-  else                  { grade = 'Skip';      color = '#7f1d1d'; emoji = '💀'; }
+  let grade, color;
+  if (score >= 80)      { grade = 'Excellent'; color = '#16a34a'; }
+  else if (score >= 65) { grade = 'Good';      color = '#65a30d'; }
+  else if (score >= 45) { grade = 'Risky';     color = '#d97706'; }
+  else if (score >= 25) { grade = 'Poor';      color = '#dc2626'; }
+  else                  { grade = 'Skip';      color = '#7f1d1d'; }
 
-  return { score, grade, color, emoji, flags, green };
+  return { score, grade, color, flags, green };
 }
 
-// ─── Data extraction — matched to Upwork's actual text patterns ───────────────
+function verdictText(score) {
+  if (score >= 80) return 'Strong signals — apply with confidence.';
+  if (score >= 65) return 'Looks decent — worth applying.';
+  if (score >= 45) return 'Some red flags — check details first.';
+  if (score >= 25) return 'Multiple warnings — probably skip.';
+  return 'Too many red flags — save your connects.';
+}
+
+// ─── Data extraction ──────────────────────────────────────────────────────────
 function extractFromText(text) {
-  // ── PAYMENT VERIFICATION ──
-  // "Payment verified" vs "Payment unverified"
-  const paymentVerified = /payment\s+(?!un)verified/i.test(text);
+  // Payment verified — negative lookahead so "unverified" doesn't match
+  const paymentVerified = /payment\s+(?!un)verified/i.test(text) ? true
+    : /payment\s+un/i.test(text) || /payment\s+not/i.test(text) ? false
+    : null;
 
-  // ── JOB AGE ──
-  // "Posted 2 weeks ago · Proposals: 5 to 10"
-  // "Posted 2 months ago"
-  // "Posted 3 days ago"
+  // Job age
   let daysPosted = null;
-  const hoursM     = text.match(/posted\s+(\d+)\s+hours?\s+ago/i);
-  const yesterdayM = text.match(/posted\s+yesterday/i);
-  const todayM     = text.match(/posted\s+today/i);
-  const justNowM   = text.match(/posted\s+just\s+now/i);
-  const daysM      = text.match(/posted\s+(\d+)\s+days?\s+ago/i);
-  const weeksM     = text.match(/posted\s+(\d+)\s+weeks?\s+ago/i);
-  const monthsM    = text.match(/posted\s+(\d+)\s+months?\s+ago/i);
-  if      (justNowM || todayM || hoursM) daysPosted = 0;
-  else if (yesterdayM) daysPosted = 1;
-  else if (daysM)      daysPosted = parseInt(daysM[1]);
-  else if (weeksM)     daysPosted = parseInt(weeksM[1]) * 7;
-  else if (monthsM)    daysPosted = parseInt(monthsM[1]) * 30;
+  if (/posted\s+(just\s+now|today)/i.test(text) || /posted\s+\d+\s+hours?\s+ago/i.test(text)) daysPosted = 0;
+  else if (/posted\s+yesterday/i.test(text)) daysPosted = 1;
+  else { const m = text.match(/posted\s+(\d+)\s+days?\s+ago/i); if (m) daysPosted = +m[1]; }
+  if (daysPosted === null) { const m = text.match(/posted\s+(\d+)\s+weeks?\s+ago/i); if (m) daysPosted = +m[1]*7; }
+  if (daysPosted === null) { const m = text.match(/posted\s+(\d+)\s+months?\s+ago/i); if (m) daysPosted = +m[1]*30; }
 
-  // ── PROPOSALS ──
-  // "Proposals: 5 to 10"  "Proposals: 10 to 15"  "Proposals: Less than 5"
+  // Proposals
   let proposalsMid = null;
-  const propRange  = text.match(/proposals?[:\s]+(\d+)\s+to\s+(\d+)/i);
-  const propLess   = text.match(/proposals?[:\s]+less\s+than\s+(\d+)/i);
-  const propSingle = text.match(/proposals?[:\s]+(\d+)/i);
-  if (propRange)       proposalsMid = Math.round((parseInt(propRange[1]) + parseInt(propRange[2])) / 2);
-  else if (propLess)   proposalsMid = Math.round(parseInt(propLess[1]) / 2);
-  else if (propSingle) proposalsMid = parseInt(propSingle[1]);
+  const pr = text.match(/proposals?[:\s]+(\d+)\s+to\s+(\d+)/i);
+  const pl = text.match(/proposals?[:\s]+less\s+than\s+(\d+)/i);
+  const pp = text.match(/proposals?[:\s]*50\+/i);
+  const ps = text.match(/proposals?[:\s]+(\d+)/i);
+  if (pp) proposalsMid = 50;
+  else if (pr) proposalsMid = Math.round((+pr[1] + +pr[2]) / 2);
+  else if (pl) proposalsMid = Math.round(+pl[1] / 2);
+  else if (ps) proposalsMid = +ps[1];
 
-  // ── HOURLY RATE ──
-  // "Hourly: $15.00 - $40.00 - Intermediate"
-  // "Hourly: $25.00/hr"
+  // Hourly rate
   let hourlyMid = null;
-  const hourlyRange  = text.match(/hourly[:\s]+\$([0-9,.]+)\s*[-–]\s*\$([0-9,.]+)/i);
-  const hourlySingle = text.match(/hourly[:\s]+\$([0-9,.]+)/i);
-  if (hourlyRange)       hourlyMid = Math.round((parseFloat(hourlyRange[1].replace(/,/g,'')) + parseFloat(hourlyRange[2].replace(/,/g,''))) / 2);
-  else if (hourlySingle) hourlyMid = parseFloat(hourlySingle[1].replace(/,/g,''));
+  const hr = text.match(/hourly[:\s$]*(\d+(?:\.\d+)?)\s*[-–]\s*\$?(\d+(?:\.\d+)?)/i);
+  const hs = text.match(/hourly[:\s$]*(\d+(?:\.\d+)?)/i);
+  if (hr) hourlyMid = Math.round((+hr[1] + +hr[2]) / 2);
+  else if (hs) hourlyMid = +hs[1];
 
-  // ── FIXED BUDGET ──
-  // "Est. budget: $500.00"  "Fixed price ... $500"
+  // Fixed budget
   let fixedBudget = null;
-  const fixedM = text.match(/(?:est\.?\s*budget|fixed)[:\s]*\$([0-9,]+(?:\.\d+)?)/i);
-  if (fixedM && !hourlyMid) fixedBudget = parseFloat(fixedM[1].replace(/,/g,''));
+  const fb = text.match(/(?:est\.?\s*budget|fixed)[:\s]*\$?([\d,]+)/i);
+  if (fb && !hourlyMid) fixedBudget = parseFloat(fb[1].replace(/,/g,''));
 
-  // ── CLIENT HIRES (the number before "$X spent") ──
-  // Upwork shows: "★★★★★ 0  $0 spent" — the 0 is total jobs posted/hires
-  // Also: "123 hires"  or "No hires"
-  let clientHires = null;
-  const noHiresM  = /no\s+hires/i.test(text);
-  const hiresM    = text.match(/(\d+)\s+hires/i);
-  const jobsM     = text.match(/(\d+)\s+jobs?\s+posted/i);
-  // The standalone zero before "$X spent" pattern
-  const zeroBeforeSpend = text.match(/\b(0)\s+\$\d+\s+spent/i);
-  if      (noHiresM)      clientHires = 0;
-  else if (hiresM)        clientHires = parseInt(hiresM[1]);
-  else if (jobsM)         clientHires = parseInt(jobsM[1]);
-  else if (zeroBeforeSpend) clientHires = 0;
-
-  // ── CLIENT SPEND ──
-  // "$0 spent"  "$1.2k spent"  "$50K+ spent"
+  // Client spend
   let clientSpend = null;
-  // Patterns: "$5K+ spent", "$1.2k spent", "$50 spent", "$5,000 spent"
-  const spentM = text.match(/\$(\d[\d,.]*)(k\+?)?\s*\+?\s*spent/i);
-  if (spentM) {
-    let v = parseFloat(spentM[1].replace(/,/g,''));
-    if (spentM[2] && /k/i.test(spentM[2])) v *= 1000;
-    // Handle "$5K+ spent" where + means "more than"
+  const sm = text.match(/\$([\d,.]+)(k\+?)?\s*\+?\s*spent/i);
+  if (sm) {
+    let v = parseFloat(sm[1].replace(/,/g,''));
+    if (sm[2] && /k/i.test(sm[2])) v *= 1000;
     clientSpend = v;
   }
 
-  // ── CLIENT RATING ──
-  // Upwork shows numeric rating like "4.9" near stars, or just "0" for no rating
+  // Client hires
+  let clientHires = null;
+  if (/no\s+hires/i.test(text)) clientHires = 0;
+  else { const m = text.match(/(\d+)\s+hires/i); if (m) clientHires = +m[1]; }
+
+  // Client rating (1.0–5.9)
   let clientRating = null;
-  // Match ratings 1.0-5.9 anchored near a star or 'rating' word, or any x.y in range
-  const ratingM = text.match(/(?:★|\brating\b)[^\d]*(\d\.\d)/i) ?? text.match(/\b([1-5]\.\d)\b/);
-  if (ratingM) clientRating = parseFloat(ratingM[1] ?? ratingM[2]);
+  const rm = text.match(/(?:★|[⭐]|rating)[^\d]*([1-5]\.\d)/i) || text.match(/\b([4-5]\.\d)\b/);
+  if (rm) clientRating = parseFloat(rm[1]);
 
-  // ── DESCRIPTION LENGTH ──
-  // Use the whole card text minus noise as a rough quality proxy
-  const cleanText = text.replace(/\s+/g,' ').trim();
-  const descLength = cleanText.length > 50 ? cleanText.length : null;
-
-  return {
-    paymentVerified, daysPosted, proposalsMid,
-    hourlyMid, fixedBudget, clientHires, clientSpend,
-    clientRating, descLength
-  };
+  return { paymentVerified, daysPosted, proposalsMid, hourlyMid, fixedBudget, clientSpend, clientHires, clientRating };
 }
 
-// ─── Badge rendering ──────────────────────────────────────────────────────────
-
-// ─── Verdict copy ─────────────────────────────────────────────────────────────
-function verdictText(score) {
-  if (score >= 80) return '✅ Apply — strong signals across the board.';
-  if (score >= 65) return '👍 Worth applying — looks decent.';
-  if (score >= 45) return '⚠️ Risky — check the details first.';
-  if (score >= 25) return '🔴 Probably skip — multiple red flags.';
-  return '💀 Skip — save your connects for better jobs.';
-}
-
-// ─── Compact badge on job cards ───────────────────────────────────────────────
+// ─── Badge (compact, inline) ──────────────────────────────────────────────────
 let activeTooltip = null;
+let hideTimer = null;
 
 function removeTooltip() {
+  clearTimeout(hideTimer);
   if (activeTooltip) { activeTooltip.remove(); activeTooltip = null; }
 }
 
-function renderCompact(result) {
+function renderBadge(result) {
   const { score, grade, color, flags, green } = result;
+  const bg = color + '18';
 
-  // ── Minimal badge: just a coloured dot + score number ──
   const badge = document.createElement('span');
-  badge.className = 'ubi-badge';
-  badge.setAttribute('data-ubi', '1');
-  badge.setAttribute('tabindex', '0');
-  badge.style.cssText = [
-    'display:inline-flex',
-    'align-items:center',
-    'gap:5px',
-    'background:#f4f4f8',
-    'border:1px solid #d8d8e4',
-    'border-radius:5px',
-    'padding:3px 8px',
-    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-    'font-size:12px',
-    'font-weight:600',
-    'color:#3a3a4e',
-    'cursor:default',
-    'user-select:none',
-    'white-space:nowrap',
-    'position:relative',
-    'vertical-align:middle',
-    'line-height:1.4',
-    'box-sizing:border-box',
-  ].join('!important;') + '!important';
+  badge.setAttribute('data-ubi-badge', '1');
+  badge.style.cssText = `display:inline-flex!important;align-items:center!important;gap:5px!important;` +
+    `background:${bg}!important;border:1.5px solid ${color}!important;border-radius:5px!important;` +
+    `padding:2px 8px!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;` +
+    `font-size:12px!important;font-weight:700!important;color:${color}!important;cursor:default!important;` +
+    `user-select:none!important;white-space:nowrap!important;vertical-align:middle!important;line-height:1.5!important;` +
+    `box-sizing:border-box!important;text-decoration:none!important;`;
 
-  // Coloured dot (the only colour)
   const dot = document.createElement('span');
-  dot.style.cssText = `display:inline-block!important;width:8px!important;height:8px!important;border-radius:50%!important;background:${color}!important;flex-shrink:0!important;`;
+  dot.style.cssText = `display:inline-block!important;width:7px!important;height:7px!important;` +
+    `border-radius:50%!important;background:${color}!important;flex-shrink:0!important;`;
 
-  // Score number — neutral dark text
   const lbl = document.createElement('span');
-  lbl.style.cssText = 'font-size:12px!important;font-weight:700!important;color:#2a2a3e!important;font-family:inherit!important;';
+  lbl.style.cssText = `font-size:12px!important;font-weight:700!important;color:${color}!important;`;
   lbl.textContent = score;
 
   badge.appendChild(dot);
   badge.appendChild(lbl);
 
-  // ── Tooltip — appended to body, position:fixed with viewport-safe placement ──
-  let hideTimer = null;
-
-  function buildTooltip() {
+  // ── Hover tooltip ──
+  function showTip() {
+    clearTimeout(hideTimer);
+    removeTooltip();
     const rect = badge.getBoundingClientRect();
     const tip = document.createElement('div');
     activeTooltip = tip;
+    tip.style.cssText = `position:fixed!important;z-index:2147483647!important;width:270px!important;` +
+      `background:#1a1a24!important;border:1px solid #3a3a4e!important;border-radius:10px!important;` +
+      `box-shadow:0 8px 32px rgba(0,0,0,0.55)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;` +
+      `font-size:12px!important;color:#e8e8f0!important;overflow:hidden!important;pointer-events:none!important;` +
+      `top:-9999px!important;left:-9999px!important;`;
 
-    tip.style.cssText = [
-      'position:fixed',
-      'z-index:2147483647',
-      'width:270px',
-      'background:#1a1a24',
-      'border:1px solid #3a3a4e',
-      'border-radius:10px',
-      'box-shadow:0 8px 32px rgba(0,0,0,0.55)',
-      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      'font-size:12px',
-      'color:#e8e8f0',
-      'overflow:hidden',
-      'pointer-events:none',
-      'top:-9999px',
-      'left:-9999px',
-    ].join('!important;') + '!important';
-
-    // Header: big score + grade pill + one-line verdict
+    // Header
     const hdr = document.createElement('div');
     hdr.style.cssText = 'display:flex!important;align-items:center!important;gap:12px!important;padding:12px 14px!important;border-bottom:1px solid #2e2e3e!important;';
-
-    const scoreEl = document.createElement('div');
-    scoreEl.style.cssText = `font-size:32px!important;font-weight:900!important;line-height:1!important;color:${color}!important;flex-shrink:0!important;width:48px!important;text-align:center!important;`;
-    scoreEl.textContent = score;
-
+    const sEl = document.createElement('div');
+    sEl.style.cssText = `font-size:32px!important;font-weight:900!important;line-height:1!important;color:${color}!important;flex-shrink:0!important;width:48px!important;text-align:center!important;`;
+    sEl.textContent = score;
     const meta = document.createElement('div');
     meta.style.cssText = 'flex:1!important;min-width:0!important;';
-
     const pill = document.createElement('div');
-    pill.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:10px!important;font-weight:800!important;letter-spacing:0.6px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 8px!important;margin-bottom:5px!important;`;
+    pill.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:10px!important;font-weight:800!important;letter-spacing:0.6px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 8px!important;margin-bottom:4px!important;`;
     pill.textContent = grade;
-
     const verd = document.createElement('div');
-    verd.style.cssText = 'font-size:12px!important;color:#b0b0c8!important;line-height:1.4!important;';
+    verd.style.cssText = 'font-size:11px!important;color:#b0b0c8!important;line-height:1.4!important;';
     verd.textContent = verdictText(score);
-
-    meta.appendChild(pill);
-    meta.appendChild(verd);
-    hdr.appendChild(scoreEl);
-    hdr.appendChild(meta);
+    meta.appendChild(pill); meta.appendChild(verd);
+    hdr.appendChild(sEl); hdr.appendChild(meta);
     tip.appendChild(hdr);
 
     // Signals
     if (green.length || flags.length) {
       const sig = document.createElement('div');
-      sig.style.cssText = 'padding:8px 14px 10px!important;display:flex!important;flex-direction:column!important;gap:5px!important;';
+      sig.style.cssText = 'padding:8px 14px 10px!important;display:flex!important;flex-direction:column!important;gap:4px!important;';
       green.forEach(g => {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex!important;align-items:flex-start!important;gap:7px!important;font-size:11px!important;color:#6ee7b7!important;line-height:1.4!important;';
-        row.innerHTML = '<span style="flex-shrink:0">✓</span><span>' + g + '</span>';
-        sig.appendChild(row);
+        const r = document.createElement('div');
+        r.style.cssText = 'display:flex!important;gap:6px!important;font-size:11px!important;color:#6ee7b7!important;line-height:1.4!important;';
+        r.innerHTML = '<span style="flex-shrink:0">✓</span><span>' + g + '</span>';
+        sig.appendChild(r);
       });
       flags.forEach(f => {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex!important;align-items:flex-start!important;gap:7px!important;font-size:11px!important;color:#fcd34d!important;line-height:1.4!important;';
-        row.innerHTML = '<span style="flex-shrink:0">!</span><span>' + f + '</span>';
-        sig.appendChild(row);
+        const r = document.createElement('div');
+        r.style.cssText = 'display:flex!important;gap:6px!important;font-size:11px!important;color:#fcd34d!important;line-height:1.4!important;';
+        r.innerHTML = '<span style="flex-shrink:0">!</span><span>' + f + '</span>';
+        sig.appendChild(r);
       });
       tip.appendChild(sig);
     }
 
     const foot = document.createElement('div');
     foot.style.cssText = 'background:#111118!important;padding:5px 14px!important;font-size:10px!important;color:#5a5a72!important;border-top:1px solid #2e2e3e!important;';
-    foot.textContent = '⚡ Upwork Bid Intel · No account · All local';
+    foot.textContent = '⚡ Upwork Bid Intel · All local · No account';
     tip.appendChild(foot);
-
     document.body.appendChild(tip);
 
-    // ── Position: fixed = viewport coords, NO scrollY offset ──
+    // Position: fixed viewport coords, no scrollY
     requestAnimationFrame(() => {
-      const tw = tip.offsetWidth  || 270;
-      const th = tip.offsetHeight || 200;
-
-      // Horizontal: align to badge left, keep inside viewport
+      const tw = tip.offsetWidth || 270, th = tip.offsetHeight || 200;
       let left = rect.left;
       if (left + tw > window.innerWidth - 8) left = window.innerWidth - tw - 8;
       if (left < 8) left = 8;
-
-      // Vertical: below badge by default, flip above if too close to bottom
       let top = rect.bottom + 6;
       if (top + th > window.innerHeight - 8) top = rect.top - th - 6;
       if (top < 8) top = 8;
-
-      tip.style.top  = top  + 'px';
-      tip.style.left = left + 'px';
+      tip.style.top = top + 'px'; tip.style.left = left + 'px';
     });
-
-    return tip;
   }
 
-  function showTooltip() {
-    clearTimeout(hideTimer);
-    removeTooltip();
-    buildTooltip();
-  }
-
-  function scheduleHide() {
-    hideTimer = setTimeout(removeTooltip, 120);
-  }
-
-  badge.addEventListener('mouseenter', showTooltip);
-  badge.addEventListener('mouseleave', scheduleHide);
-  badge.addEventListener('focus',      showTooltip);
-  badge.addEventListener('blur',       scheduleHide);
-
+  badge.addEventListener('mouseenter', showTip);
+  badge.addEventListener('mouseleave', () => { hideTimer = setTimeout(removeTooltip, 120); });
   return badge;
 }
 
-// ─── Detail page panel renderer ──────────────────────────────────────────────
+// ─── Detail panel ─────────────────────────────────────────────────────────────
 function renderPanel(result) {
   const { score, grade, color, flags, green } = result;
-
   const panel = document.createElement('div');
-  panel.style.cssText = [
-    'display:flex',
-    'align-items:flex-start',
-    'gap:0',
-    'background:#ffffff',
-    'border:1.5px solid #e2e2ee',
-    `border-left:4px solid ${color}`,
-    'border-radius:10px',
-    'padding:0',
-    'margin:14px 0',
-    'max-width:660px',
-    'box-shadow:0 1px 6px rgba(0,0,0,0.07)',
-    'overflow:hidden',
-    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-    'font-size:13px',
-    'box-sizing:border-box',
-  ].join('!important;') + '!important';
+  panel.setAttribute('data-ubi-panel', '1');
+  panel.style.cssText = `display:flex!important;align-items:stretch!important;background:#fff!important;` +
+    `border:1.5px solid #e2e2ee!important;border-left:4px solid ${color}!important;border-radius:10px!important;` +
+    `margin:10px 0 14px!important;max-width:680px!important;box-shadow:0 1px 4px rgba(0,0,0,0.07)!important;` +
+    `overflow:hidden!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;box-sizing:border-box!important;`;
 
-  // Left: score block
-  const left = document.createElement('div');
-  left.style.cssText = [
-    'flex-shrink:0',
-    'text-align:center',
-    'padding:16px 18px',
-    'display:flex',
-    'flex-direction:column',
-    'align-items:center',
-    'justify-content:center',
-    'gap:6px',
-    'min-width:82px',
-    `background:rgba(${hexToRgb(color)},0.06)`,
-    `border-right:1px solid rgba(${hexToRgb(color)},0.15)`,
-  ].join('!important;') + '!important';
+  // Left score
+  const L = document.createElement('div');
+  const rgb = hexToRgb(color);
+  L.style.cssText = `flex-shrink:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;` +
+    `justify-content:center!important;padding:16px 18px!important;min-width:80px!important;text-align:center!important;` +
+    `background:rgba(${rgb},0.07)!important;border-right:1px solid rgba(${rgb},0.18)!important;gap:5px!important;`;
+  const nEl = document.createElement('div');
+  nEl.style.cssText = `font-size:32px!important;font-weight:900!important;color:${color}!important;line-height:1!important;letter-spacing:-1px!important;`;
+  nEl.textContent = score;
+  const pEl = document.createElement('div');
+  pEl.style.cssText = `background:${color}!important;color:#fff!important;font-size:9px!important;font-weight:800!important;` +
+    `letter-spacing:0.8px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 7px!important;`;
+  pEl.textContent = grade;
+  L.appendChild(nEl); L.appendChild(pEl); panel.appendChild(L);
 
-  const numEl = document.createElement('div');
-  numEl.style.cssText = `font-size:34px!important;font-weight:900!important;line-height:1!important;color:${color}!important;letter-spacing:-1px!important;`;
-  numEl.textContent = score;
+  // Right content
+  const R = document.createElement('div');
+  R.style.cssText = 'flex:1!important;padding:12px 16px!important;min-width:0!important;';
 
-  const pillEl = document.createElement('div');
-  pillEl.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:9px!important;font-weight:800!important;letter-spacing:0.8px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 7px!important;`;
-  pillEl.textContent = grade;
+  const hRow = document.createElement('div');
+  hRow.style.cssText = 'display:flex!important;align-items:center!important;gap:6px!important;margin-bottom:6px!important;';
+  const logo = document.createElement('span'); logo.textContent = '⚡'; logo.style.fontSize = '13px';
+  const ttl = document.createElement('span');
+  ttl.style.cssText = 'font-size:10px!important;font-weight:700!important;color:#8080a0!important;letter-spacing:0.5px!important;text-transform:uppercase!important;';
+  ttl.textContent = 'Bid Intel';
+  hRow.appendChild(logo); hRow.appendChild(ttl); R.appendChild(hRow);
 
-  left.appendChild(numEl);
-  left.appendChild(pillEl);
-  panel.appendChild(left);
-
-  // Right: content
-  const right = document.createElement('div');
-  right.style.cssText = 'flex:1!important;padding:14px 16px!important;min-width:0!important;';
-
-  const headerRow = document.createElement('div');
-  headerRow.style.cssText = 'display:flex!important;align-items:center!important;gap:6px!important;margin-bottom:8px!important;';
-  const logoSpan = document.createElement('span');
-  logoSpan.textContent = '⚡';
-  logoSpan.style.cssText = 'font-size:13px!important;';
-  const titleSpan = document.createElement('span');
-  titleSpan.textContent = 'Bid Intel';
-  titleSpan.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#8080a0!important;letter-spacing:0.5px!important;text-transform:uppercase!important;';
-  headerRow.appendChild(logoSpan);
-  headerRow.appendChild(titleSpan);
-  right.appendChild(headerRow);
-
-  const verdEl = document.createElement('div');
-  verdEl.style.cssText = 'font-size:14px!important;font-weight:600!important;color:#1a1a2e!important;margin-bottom:10px!important;line-height:1.4!important;';
-  verdEl.textContent = verdictText(score);
-  right.appendChild(verdEl);
+  const vEl = document.createElement('div');
+  vEl.style.cssText = `font-size:13px!important;font-weight:600!important;color:#1a1a2e!important;margin-bottom:8px!important;line-height:1.4!important;`;
+  vEl.textContent = verdictText(score);
+  R.appendChild(vEl);
 
   if (green.length || flags.length) {
-    const chipsWrap = document.createElement('div');
-    chipsWrap.style.cssText = 'display:flex!important;flex-wrap:wrap!important;gap:5px!important;margin-bottom:10px!important;';
+    const chips = document.createElement('div');
+    chips.style.cssText = 'display:flex!important;flex-wrap:wrap!important;gap:4px!important;margin-bottom:8px!important;';
     green.forEach(g => {
-      const chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#f0fdf4!important;color:#166534!important;border:1px solid #bbf7d0!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
-      chip.textContent = '✓ ' + g;
-      chipsWrap.appendChild(chip);
+      const c = document.createElement('span');
+      c.style.cssText = 'background:#f0fdf4!important;color:#166534!important;border:1px solid #bbf7d0!important;border-radius:5px!important;padding:2px 8px!important;font-size:11px!important;white-space:nowrap!important;';
+      c.textContent = '✓ ' + g; chips.appendChild(c);
     });
     flags.forEach(f => {
-      const chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
-      chip.textContent = '! ' + f;
-      chipsWrap.appendChild(chip);
+      const c = document.createElement('span');
+      c.style.cssText = 'background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important;border-radius:5px!important;padding:2px 8px!important;font-size:11px!important;white-space:nowrap!important;';
+      c.textContent = '! ' + f; chips.appendChild(c);
     });
-    right.appendChild(chipsWrap);
+    R.appendChild(chips);
   }
 
-  const footEl = document.createElement('div');
-  footEl.style.cssText = 'font-size:10px!important;color:#a0a0b8!important;';
-  footEl.textContent = 'All local · No account · Upwork Bid Intel';
-  right.appendChild(footEl);
-
-  panel.appendChild(right);
+  const foot = document.createElement('div');
+  foot.style.cssText = 'font-size:10px!important;color:#a0a0b8!important;';
+  foot.textContent = 'All local · No account · Upwork Bid Intel';
+  R.appendChild(foot);
+  panel.appendChild(R);
   return panel;
 }
 
 function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return r+','+g+','+b;
+  return [parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)].join(',');
 }
 
-// ─── Card processing (search results) ────────────────────────────────────────
-const processedJobUrls = new Set();
+// ─── Card injection ───────────────────────────────────────────────────────────
+// Anchor on job title links — the ONE reliable element on every Upwork page.
+// No guessing at card container class names.
+
+const scoredUrls = new Set();
 
 function processCards() {
-  // Use ONLY the stable semantic selector — no broad fallbacks that match non-card elements
-  let cards = Array.from(document.querySelectorAll('[data-test="job-tile"]'));
+  // Find every job title heading that contains a /jobs/ link
+  const titleLinks = document.querySelectorAll('h2 a[href*="/jobs/"], h3 a[href*="/jobs/"]');
 
-  // Single specific fallback if primary finds nothing (Best Matches uses different markup)
-  if (!cards.length) {
-    cards = Array.from(document.querySelectorAll('[class*="JobTile"]'))
-      .filter(el => el.querySelector('h2, h3') && !el.closest('[class*="Preview"]'));
-  }
+  titleLinks.forEach(link => {
+    const href = (link.getAttribute('href') || '').split('?')[0];
+    if (!href) return;
 
-  // Remove descendants — keep only outermost card element
-  cards = cards.filter(c => !cards.some(o => o !== c && o.contains(c)));
+    // Dedup by URL — survives React re-renders
+    if (scoredUrls.has(href)) return;
 
-  cards.forEach(card => {
-    // Dedup by job URL — survives React re-renders that wipe data attributes
-    const link = card.querySelector('a[href*="/jobs/"]');
-    const href = link ? (link.getAttribute('href') || '') : '';
-    const jobKey = href.split('?')[0];
+    // Check if badge already exists right after the heading
+    const heading = link.closest('h2') || link.closest('h3');
+    if (!heading) return;
+    if (heading.nextSibling && heading.nextSibling.getAttribute &&
+        heading.nextSibling.getAttribute('data-ubi-badge')) return;
 
-    if (jobKey && processedJobUrls.has(jobKey)) return;
-    if (card.dataset.ubiDone) return;
+    scoredUrls.add(href);
 
-    if (jobKey) processedJobUrls.add(jobKey);
-    card.dataset.ubiDone = '1';
-
-    const text = card.textContent || '';
+    // Score: use the text of the heading's parent container
+    // Walk up 4 levels from heading to get a reasonable card scope
+    let scope = heading;
+    for (let i = 0; i < 5 && scope.parentElement; i++) scope = scope.parentElement;
+    const text = scope.textContent || '';
     const data = extractFromText(text);
     const result = scoreJob(data);
-    const badge = renderCompact(result);
+    const badge = renderBadge(result);
 
-    const wrapper = document.createElement('div');
-    wrapper.setAttribute('data-ubi-badge', '1');
-    wrapper.style.cssText = 'display:block!important;margin:4px 0 2px!important;padding:0!important;clear:both!important;';
-    wrapper.appendChild(badge);
+    // Wrap in a block element so it doesn't collapse into the heading's flex row
+    const wrap = document.createElement('div');
+    wrap.setAttribute('data-ubi-badge', '1');
+    wrap.style.cssText = 'display:block!important;margin:3px 0!important;padding:0!important;line-height:1!important;';
+    wrap.appendChild(badge);
 
-    // Insert immediately after the h2/h3 element — no ancestor walk-up
-    const h = card.querySelector('h2') || card.querySelector('h3');
-    if (h && h.parentNode) {
-      if (h.nextSibling) {
-        h.parentNode.insertBefore(wrapper, h.nextSibling);
-      } else {
-        h.parentNode.appendChild(wrapper);
-      }
+    // Insert immediately after the heading
+    if (heading.nextSibling) {
+      heading.parentNode.insertBefore(wrap, heading.nextSibling);
     } else {
-      card.appendChild(wrapper);
+      heading.parentNode.appendChild(wrap);
     }
   });
 }
 
-// ─── Detail page / slider panel ──────────────────────────────────────────────
+// ─── Slider / detail page ─────────────────────────────────────────────────────
 function processDetailPage() {
-  const JOB_DETAIL_RE = /(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i;
-  const urlMatch = location.href.match(JOB_DETAIL_RE);
-  if (!urlMatch) return;
+  // Matches: /jobs/~hex  or  /details/~hex  (slider panels)
+  const m = location.href.match(/(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i);
+  if (!m) return;
 
-  // Remove any stale panel from a previous navigation before re-scoring
-  const stale = document.querySelector('[data-ubi-panel]');
-  if (stale) stale.remove();
+  // Remove stale panel from previous navigation
+  document.querySelectorAll('[data-ubi-panel]').forEach(el => el.remove());
 
-  const jobUid = urlMatch[1];
+  const jobUid = m[1];
 
-  // ── Strategy 1: reuse the exact card text the badge already scored ──
-  // Guarantees card badge == slider panel score
+  // Find the job title link matching this UID — guaranteed same card text as the badge
+  const titleLink = Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
+    .find(a => (a.getAttribute('href') || '').includes(jobUid));
+
   let text = '';
-  const cardLink = Array.from(
-    document.querySelectorAll('a[href*="/jobs/"], a[href*="/details/"]')
-  ).find(a => (a.getAttribute('href') || '').includes(jobUid));
 
-  const card = cardLink?.closest('[data-test="job-tile"], [data-ubi-done], article');
-  if (card) {
-    text = card.textContent || '';
+  if (titleLink) {
+    // Walk up to get a reasonable scope around this specific job
+    let scope = titleLink;
+    for (let i = 0; i < 6 && scope.parentElement; i++) scope = scope.parentElement;
+    text = scope.textContent || '';
+  } else {
+    // Slider opened without background card — find the slider container
+    const slider = document.querySelector(
+      '[role="dialog"], [role="complementary"], [class*="slider" i], [class*="Slider"]'
+    );
+    text = (slider || document.body).textContent || '';
   }
 
-  // ── Strategy 2: scope to the slider/modal container ──
-  if (!text) {
-    const SLIDER = [
-      '[role="dialog"]',
-      '[role="complementary"]',
-      '[class*="slider" i][class*="panel" i]',
-      '[class*="SliderPanel"]',
-      '[class*="ModalContent"]',
-      '[class*="DetailView"]',
-    ].join(',');
-    const sliderEl = document.querySelector(SLIDER);
-    if (sliderEl) text = sliderEl.textContent || '';
-  }
-
-  // ── Strategy 3: walk up from h1 to find the panel wrapper ──
-  if (!text) {
-    let el = document.querySelector('h1');
-    if (el) {
-      for (let i = 0; i < 5 && el.parentElement; i++) el = el.parentElement;
-      text = el.textContent || '';
-    }
-  }
-
-  if (!text) return; // nothing to score
+  if (!text.trim()) return;
 
   const data = extractFromText(text);
   const result = scoreJob(data);
   const panel = renderPanel(result);
-  panel.setAttribute('data-ubi-panel', '1');
 
-  // Insert after the h1 in the slider
-  const h1 = document.querySelector(
-    '[role="dialog"] h1, [role="complementary"] h1, main h1, h1'
-  );
-  if (h1 && h1.parentNode) {
-    h1.parentNode.insertBefore(panel, h1.nextSibling);
+  // Insert after the first h1 or h2 on the page / in the slider
+  const h = document.querySelector('[role="dialog"] h1, [role="complementary"] h1, main h1, h1, h2');
+  if (h && h.parentNode) {
+    h.parentNode.insertBefore(panel, h.nextSibling);
   } else {
-    const main = document.querySelector('main, [role="main"]');
-    if (main) main.prepend(panel);
+    (document.querySelector('main') || document.body).prepend(panel);
   }
 }
 
-// ─── Route detection ──────────────────────────────────────────────────────────
+// ─── Route detection + MutationObserver ──────────────────────────────────────
 function onRouteChange() {
   const url = location.href;
-  // Detect any job detail view — full page or slider panel
-  const isDetail = /(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(url);
-  if (isDetail) {
-    setTimeout(processDetailPage, 900);
-    // Also keep scoring the list cards underneath the slider
+  if (/(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(url)) {
+    setTimeout(processDetailPage, 1000);
     setTimeout(processCards, 700);
   } else {
     setTimeout(processCards, 700);
   }
 }
 
-// ─── MutationObserver (SPA) ───────────────────────────────────────────────────
 let lastUrl = location.href;
-let throttleTimer = null;
+let throttle = null;
 
 new MutationObserver(() => {
-  // Route change
   if (location.href !== lastUrl) {
     lastUrl = location.href;
-    // Clear both DOM flags and URL set so new page is scored fresh
-    document.querySelectorAll('[data-ubi-done]').forEach(el => delete el.dataset.ubiDone);
-    processedJobUrls.clear();
+    scoredUrls.clear();
+    document.querySelectorAll('[data-ubi-panel]').forEach(el => el.remove());
     onRouteChange();
     return;
   }
-  // Throttle card processing (new cards injected by Upwork's infinite scroll)
-  clearTimeout(throttleTimer);
-  throttleTimer = setTimeout(processCards, 400);
+  clearTimeout(throttle);
+  throttle = setTimeout(processCards, 500);
 }).observe(document.body, { childList: true, subtree: true });
 
-// Initial run
 onRouteChange();
 
-// Popup message
+// Popup message handler
 chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === 'GET_PAGE_DATA') {
-    const isDetail = !!location.href.match(/\/jobs\/.*~[0-9a-f]+/i);
-    // On detail pages: read body. On search pages: read only first job card for popup score.
-    let scopeEl = document.body;
-    if (!isDetail) {
-      scopeEl = document.querySelector(
-        '[data-test="job-tile"], [class*="JobTile"], [class*="job-tile"], article[class*="job"]'
-      ) || document.body;
-    }
-    const data = extractFromText(scopeEl.textContent);
+    const data = extractFromText(document.body.textContent || '');
     const result = scoreJob(data);
-    sendResponse({ result, isDetail, multiCard: !isDetail, cardCount: document.querySelectorAll('[data-ubi-done]').length });
+    sendResponse({ result, url: location.href });
   }
   return true;
 });
