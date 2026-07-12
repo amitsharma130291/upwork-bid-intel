@@ -398,56 +398,70 @@ function processDetailPage() {
   document.querySelectorAll('[data-ubi-panel]').forEach(el => el.remove());
 
   const jobUid = m[1];
-  let text = '';
-  let insertAfter = null; // the element we insert the panel after
 
-  // ── Strategy 1: scope to div.job-details-content (the slider) ──
-  // The Best Matches slider uses:
-  //   div.job-details-content > div.job-details-card.slider > div.air3-card-sections > section > h4
-  const sliderContent = document.querySelector('.job-details-content, .job-details-card');
-  if (sliderContent) {
-    text = sliderContent.textContent || '';
-    // Title is h4 inside the first section
-    const h4 = sliderContent.querySelector('h4, h3, h2, h1');
-    if (h4) insertAfter = h4;
-  }
+  function tryInject() {
+    // Already injected this navigation?
+    if (document.querySelector('[data-ubi-panel]')) return;
 
-  // ── Strategy 2: reuse matching card text from the list (same score as badge) ──
-  if (!text) {
-    const cardLink = Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
-      .find(a => (a.getAttribute('href') || '').includes(jobUid));
-    const card = cardLink?.closest('section, [data-ubi-done], article');
-    if (card) text = card.textContent || '';
-  }
+    let text = '';
+    let insertAfter = null;
 
-  // ── Strategy 3: fallback to any heading not in nav ──
-  if (!text) {
-    const heading = Array.from(document.querySelectorAll('h1, h2, h3, h4'))
-      .find(h => !h.closest('nav, header'));
-    if (heading) {
-      let el = heading;
-      while (el.parentElement && !['section','main','body'].includes(el.tagName.toLowerCase())) {
-        el = el.parentElement;
-      }
-      text = el.textContent || '';
-      if (!insertAfter) insertAfter = heading;
+    // ── Strategy 1: div.job-details-content (the slider container) ──
+    // DOM: div.job-details-content > div.job-details-card.slider >
+    //      div.air3-card-sections > section.air3-card-section > h4
+    const sliderContent = document.querySelector('.job-details-content, .job-details-card');
+    if (sliderContent) {
+      text = sliderContent.textContent || '';
+      const titleEl = sliderContent.querySelector('h4, h3, h2, h1');
+      if (titleEl) insertAfter = titleEl;
     }
+
+    // ── Strategy 2: matching background card text ──
+    if (!text) {
+      const cardLink = Array.from(document.querySelectorAll('a[href*="/jobs/"]'))
+        .find(a => (a.getAttribute('href') || '').includes(jobUid));
+      const card = cardLink?.closest('section.air3-card-section, [data-ubi-done], article');
+      if (card) text = card.textContent || '';
+    }
+
+    // ── Strategy 3: any heading not in nav ──
+    if (!text) {
+      const heading = Array.from(document.querySelectorAll('h4, h3, h2, h1'))
+        .find(h => !h.closest('nav, header'));
+      if (heading) {
+        let el = heading;
+        while (el.parentElement && !['section','main','body'].includes(el.tagName.toLowerCase())) {
+          el = el.parentElement;
+        }
+        text = el.textContent || '';
+        if (!insertAfter) insertAfter = heading;
+      }
+    }
+
+    if (!text || text.trim().length < 30) return false; // signal: not ready yet
+
+    const data = extractFromText(text);
+    const result = scoreJob(data);
+    const panel = renderPanel(result);
+    panel.setAttribute('data-ubi-panel', '1');
+
+    if (insertAfter && insertAfter.parentNode) {
+      insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
+    } else {
+      const container = document.querySelector('.job-details-content, main') || document.body;
+      container.prepend(panel);
+    }
+    return true; // signal: success
   }
 
-  if (!text || text.trim().length < 30) return;
-
-  const data = extractFromText(text);
-  const result = scoreJob(data);
-  const panel = renderPanel(result);
-  panel.setAttribute('data-ubi-panel', '1');
-
-  // Insert panel after the title heading inside the slider
-  if (insertAfter && insertAfter.parentNode) {
-    insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
-  } else {
-    // Fallback: prepend to slider or main
-    const container = sliderContent || document.querySelector('main') || document.body;
-    container.prepend(panel);
+  // Try immediately, then retry at 800ms, 1800ms, 3500ms
+  // The slider loads asynchronously so content may not exist yet
+  if (!tryInject()) {
+    setTimeout(() => { if (!tryInject()) {
+      setTimeout(() => { if (!tryInject()) {
+        setTimeout(tryInject, 1700);
+      }}, 1000);
+    }}, 800);
   }
 }
 
@@ -465,6 +479,7 @@ let lastUrl = location.href;
 let throttle = null;
 
 new MutationObserver(() => {
+  // Route change
   if (location.href !== lastUrl) {
     lastUrl = location.href;
     scoredUrls.clear();
@@ -472,6 +487,18 @@ new MutationObserver(() => {
     onRouteChange();
     return;
   }
+
+  // Slider content appeared dynamically — inject panel if on a detail URL
+  // and job-details-content is now in the DOM but not yet scored
+  if (/(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(location.href)) {
+    const slider = document.querySelector('.job-details-content, .job-details-card');
+    if (slider && !document.querySelector('[data-ubi-panel]')) {
+      clearTimeout(throttle);
+      throttle = setTimeout(processDetailPage, 300);
+      return;
+    }
+  }
+
   clearTimeout(throttle);
   throttle = setTimeout(processCards, 500);
 }).observe(document.body, { childList: true, subtree: true });
