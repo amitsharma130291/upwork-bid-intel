@@ -475,42 +475,58 @@ function hexToRgb(hex) {
 
 // ─── Card processing (search results) ────────────────────────────────────────
 function processCards() {
-  // Priority-fallback selector prevents ancestor+descendant double-badge.
-  // Use the most specific match first; fall back progressively.
-  let cards = document.querySelectorAll('[data-test="job-tile"]');
-  if (!cards.length) cards = document.querySelectorAll('[class*="JobTile"]');
-  if (!cards.length) cards = document.querySelectorAll('[class*="job-tile"]');
-  if (!cards.length) cards = document.querySelectorAll('article[class*="job"], section[class*="job"]');
+  // Priority-fallback: try selectors from most specific to least.
+  // Stops at the first selector that returns results — avoids ancestor+descendant matches.
+  const CARD_SELECTORS = [
+    '[data-test="job-tile"]',
+    '[class*="JobTile"]',
+    '[class*="job-tile"]',
+    'article[class*="job"]',
+    'section[class*="job"]',
+  ];
+
+  let rawCards = [];
+  for (const sel of CARD_SELECTORS) {
+    const found = document.querySelectorAll(sel);
+    if (found.length) { rawCards = Array.from(found); break; }
+  }
+
+  // Remove any card that is a descendant of another card in the set (dedup nesting)
+  const cards = rawCards.filter(c => !rawCards.some(other => other !== c && other.contains(c)));
 
   cards.forEach(card => {
-    // Skip if this element OR any ancestor is already scored
-    if (card.dataset.ubiDone || card.closest('[data-ubi-done]')) return;
-    // Mark this card AND all its descendants immediately to block races
+    // Skip if already processed
+    if (card.dataset.ubiDone) return;
+    // Mark immediately — before any async work — to block re-entry
     card.dataset.ubiDone = '1';
-    card.setAttribute('data-ubi-done', '1');
-    card.querySelectorAll('*').forEach(el => el.dataset.ubiDone = '1');
 
     const text = card.textContent || '';
     const data = extractFromText(text);
     const result = scoreJob(data);
     const badge = renderCompact(result);
 
-    // Insert after title
-    const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="heading"], a[href*="/jobs/"]');
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'margin:5px 0 3px;line-height:1;';
+    wrapper.appendChild(badge);
+
+    // Find the job title — h2/h3 is the title, NOT the metadata row
+    // Insert the badge AFTER the title so it appears below the job name
+    const titleEl = card.querySelector('h2, h3');
     if (titleEl) {
-      // Insert as inline element right after the title
-      const wrapper = document.createElement('div');
-      wrapper.style.cssText = 'margin:4px 0 6px;';
-      wrapper.appendChild(badge);
       titleEl.parentNode.insertBefore(wrapper, titleEl.nextSibling);
     } else {
-      card.prepend(badge);
+      // Fallback: put at the very top of the card
+      const firstChild = card.firstElementChild;
+      if (firstChild) card.insertBefore(wrapper, firstChild.nextSibling);
+      else card.appendChild(wrapper);
     }
   });
 }
 
 // ─── Detail page ──────────────────────────────────────────────────────────────
 function processDetailPage() {
+  // Only run on actual job detail pages (URL contains job UID like ~01234abc)
+  if (!location.href.match(/\/jobs\/.*~[0-9a-f]{18,}/i)) return;
   if (document.querySelector('.ubi-panel')) return;
 
   const text = document.body.textContent || '';
