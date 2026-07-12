@@ -479,226 +479,6 @@ function hexToRgb(hex) {
 
 
 // ─── Card processing (search results) ────────────────────────────────────────
-// Keyed by job URL — survives React re-renders
-const processedJobUrls = new Set();
-
-function processCards() {
-  // ── Step 1: find all candidate job cards ──
-  // Try selectors from most specific to least, stop at first hit.
-  // Each selector targets the OUTERMOST card wrapper only.
-  const SELECTORS = [
-    '[data-test="job-tile"]',
-    '[data-test="UpCGrid-col"]',
-    '[class*="JobTile"]:not([class*="Preview"]):not([class*="Detail"])',
-    '[class*="job-tile"]:not([class*="preview"])',
-    '[class*="BestMatch"]',
-    '[class*="JobCard"]',
-  ];
-
-  let cards = [];
-  for (const sel of SELECTORS) {
-    const found = Array.from(document.querySelectorAll(sel));
-    if (found.length) { cards = found; break; }
-  }
-
-  // Broad fallback: elements that contain a job link and meaningful text
-  if (!cards.length) {
-    cards = Array.from(document.querySelectorAll('article, li'))
-      .filter(el =>
-        el.querySelector('a[href*="/jobs/"]') &&
-        el.textContent.trim().length > 150
-      );
-  }
-
-  // ── Step 2: remove descendants — keep only outermost per physical card ──
-  cards = cards.filter(c => !cards.some(o => o !== c && o.contains(c)));
-
-  cards.forEach(card => {
-    // ── Step 3: stable dedup by job URL ──
-    const link = card.querySelector('a[href*="/jobs/"]');
-    const jobUrl = link ? (link.getAttribute('href') || link.href || '') : '';
-    const jobKey = jobUrl.replace(/\?.*$/, '').trim(); // strip query params
-
-    if (jobKey && processedJobUrls.has(jobKey)) return;
-    if (card.dataset.ubiDone) return;
-    if (card.querySelector('[data-ubi-badge]')) return; // already has a badge
-
-    if (jobKey) processedJobUrls.add(jobKey);
-    card.dataset.ubiDone = '1';
-
-    // ── Step 4: score using the card's OWN text only ──
-    const text = card.textContent || '';
-    const data = extractFromText(text);
-    const result = scoreJob(data);
-    const badge = renderCompact(result);
-
-    // ── Step 5: insert badge in a fixed, safe position ──
-    // Always inject as a block-level row INSIDE the card,
-    // immediately after the title element.
-    const wrapper = document.createElement('div');
-    wrapper.setAttribute('data-ubi-badge', '1');
-    // Block row so it never gets pulled into flex/grid layouts
-    wrapper.style.cssText = [
-      'display:block',
-      'width:100%',
-      'margin:4px 0 2px',
-      'padding:0',
-      'line-height:1',
-      'clear:both',
-      'float:none',
-      'position:static',
-      'background:transparent',
-    ].join('!important;') + '!important';
-    wrapper.appendChild(badge);
-
-    // Find title: h2 or h3 anywhere inside the card
-    const titleEl = card.querySelector('h2, h3');
-    if (titleEl) {
-      // Walk up until we are a direct child of the card
-      let row = titleEl;
-      while (row.parentElement && row.parentElement !== card) {
-        row = row.parentElement;
-      }
-      // Insert our wrapper right after that row
-      if (row.nextSibling) {
-        card.insertBefore(wrapper, row.nextSibling);
-      } else {
-        card.appendChild(wrapper);
-      }
-    } else {
-      // No h2/h3 — find the job link's parent row instead
-      const linkParent = link ? link.parentElement : null;
-      if (linkParent && linkParent !== card) {
-        let row = linkParent;
-        while (row.parentElement && row.parentElement !== card) row = row.parentElement;
-        card.insertBefore(wrapper, row.nextSibling || null);
-      } else {
-        card.appendChild(wrapper);
-      }
-    }
-  });
-}
-
-// ─── Detail page panel ────────────────────────────────────────────────────────
-function renderPanel(result) {
-  const { score, grade, color, flags, green } = result;
-
-  const panel = document.createElement('div');
-  panel.className = 'ubi-panel';
-  panel.setAttribute('data-ubi', '1');
-  panel.style.cssText = [
-    'display:flex',
-    'align-items:flex-start',
-    'gap:0',
-    'background:#ffffff',
-    'border:1.5px solid #e2e2ee',
-    `border-left:4px solid ${color}`,
-    'border-radius:10px',
-    'padding:0',
-    'margin:14px 0',
-    'max-width:660px',
-    'box-shadow:0 1px 6px rgba(0,0,0,0.07)',
-    'overflow:hidden',
-    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-    'font-size:13px',
-    'box-sizing:border-box',
-  ].join('!important;') + '!important';
-
-  // Left score block
-  const left = document.createElement('div');
-  left.style.cssText = [
-    'flex-shrink:0',
-    'text-align:center',
-    'padding:16px 18px',
-    'display:flex',
-    'flex-direction:column',
-    'align-items:center',
-    'justify-content:center',
-    'gap:6px',
-    'min-width:82px',
-    `background:rgba(${hexToRgb(color)},0.06)`,
-    `border-right:1px solid rgba(${hexToRgb(color)},0.15)`,
-  ].join('!important;') + '!important';
-
-  const numEl = document.createElement('div');
-  numEl.style.cssText = `font-size:34px!important;font-weight:900!important;line-height:1!important;color:${color}!important;letter-spacing:-1px!important;`;
-  numEl.textContent = score;
-
-  const pillEl = document.createElement('div');
-  pillEl.style.cssText = `display:inline-block!important;background:${color}!important;color:#fff!important;font-size:9px!important;font-weight:800!important;letter-spacing:0.8px!important;text-transform:uppercase!important;border-radius:4px!important;padding:2px 7px!important;`;
-  pillEl.textContent = grade;
-
-  left.appendChild(numEl);
-  left.appendChild(pillEl);
-  panel.appendChild(left);
-
-  // Right content block
-  const right = document.createElement('div');
-  right.style.cssText = 'flex:1!important;padding:14px 16px!important;min-width:0!important;';
-
-  // Header
-  const headerRow = document.createElement('div');
-  headerRow.style.cssText = 'display:flex!important;align-items:center!important;gap:8px!important;margin-bottom:10px!important;';
-
-  const logoSpan = document.createElement('span');
-  logoSpan.style.cssText = 'font-size:13px!important;';
-  logoSpan.textContent = '⚡';
-
-  const titleSpan = document.createElement('span');
-  titleSpan.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#8080a0!important;letter-spacing:0.5px!important;text-transform:uppercase!important;';
-  titleSpan.textContent = 'Bid Intel';
-
-  headerRow.appendChild(logoSpan);
-  headerRow.appendChild(titleSpan);
-  right.appendChild(headerRow);
-
-  // Verdict sentence
-  const verdEl = document.createElement('div');
-  verdEl.style.cssText = `font-size:14px!important;font-weight:600!important;color:#1a1a2e!important;margin-bottom:10px!important;line-height:1.4!important;`;
-  verdEl.textContent = verdictText(score);
-  right.appendChild(verdEl);
-
-  // Signal chips
-  if (green.length || flags.length) {
-    const chipsWrap = document.createElement('div');
-    chipsWrap.style.cssText = 'display:flex!important;flex-wrap:wrap!important;gap:5px!important;margin-bottom:10px!important;';
-
-    green.forEach(g => {
-      const chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#f0fdf4!important;color:#166534!important;border:1px solid #bbf7d0!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
-      chip.textContent = '✓ ' + g;
-      chipsWrap.appendChild(chip);
-    });
-
-    flags.forEach(f => {
-      const chip = document.createElement('span');
-      chip.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:4px!important;background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important;border-radius:5px!important;padding:3px 8px!important;font-size:11px!important;font-weight:500!important;white-space:nowrap!important;';
-      chip.textContent = '! ' + f;
-      chipsWrap.appendChild(chip);
-    });
-
-    right.appendChild(chipsWrap);
-  }
-
-  // Footer
-  const footEl = document.createElement('div');
-  footEl.style.cssText = 'font-size:10px!important;color:#a0a0b8!important;';
-  footEl.textContent = 'All local · No account · Scores update as you browse';
-  right.appendChild(footEl);
-
-  panel.appendChild(right);
-  return panel;
-}
-
-function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return r+','+g+','+b;
-}
-
-
-// ─── Card processing (search results) ────────────────────────────────────────
 // Track processed jobs by their URL — survives React DOM re-renders
 const processedJobUrls = new Set();
 
@@ -796,36 +576,59 @@ function processCards() {
 }
 // ─── Detail page ──────────────────────────────────────────────────────────────
 function processDetailPage() {
-  // Only run on actual job detail pages (URL contains job UID like ~01234abc)
-  if (!location.href.match(/\/jobs\/.*~[0-9a-f]{18,}/i)) return;
-  if (document.querySelector('.ubi-panel')) return;
+  // Match all Upwork job detail URL patterns:
+  // /jobs/~0123                          (classic job detail)
+  // /find-work/best-matches/details/~0123 (Best Matches slider panel)
+  // /find-work/most-recent/details/~0123  (Most Recent slider)
+  // /find-work/my-feed/details/~0123      (My Feed slider)
+  const JOB_DETAIL_RE = /(?:\/jobs\/|\/details\/)~[0-9a-f]+/i;
+  if (!location.href.match(JOB_DETAIL_RE)) return;
 
-  const text = document.body.textContent || '';
+  // Don't double-inject
+  if (document.querySelector('[data-ubi-panel]')) return;
+
+  // For the slider panel, scope to the panel element to avoid
+  // reading text from the list behind it
+  const sliderEl = document.querySelector([
+    '[role="dialog"]',
+    '[role="complementary"]',
+    '[class*="SliderPanel"]',
+    '[class*="slide-panel"]',
+    '[class*="JobDetails"]:not([class*="list"])',
+    '[class*="detail-view"]',
+  ].join(','));
+
+  const scopeEl = sliderEl || document.body;
+  const text = scopeEl.textContent || '';
   const data = extractFromText(text);
   const result = scoreJob(data);
   const panel = renderPanel(result);
+  panel.setAttribute('data-ubi-panel', '1');
 
-  // Try to insert after the job title / header
-  const target = document.querySelector([
-    '[data-test="job-details-header"]',
-    'h1',
-    '[class*="JobTitle"]',
-    '[class*="job-title"]',
-  ].join(','));
-
-  if (target?.parentNode) {
-    target.parentNode.insertBefore(panel, target.nextSibling);
+  // Insert after the h1/h2 job title inside the scoped element
+  const titleEl = scopeEl.querySelector('h1') || document.querySelector('h1');
+  if (titleEl && titleEl.parentNode) {
+    titleEl.parentNode.insertBefore(panel, titleEl.nextSibling);
   } else {
-    const main = document.querySelector('main, [role="main"]');
-    if (main) main.prepend(panel);
+    // Fallback: top of the scoped pane
+    if (scopeEl !== document.body) {
+      scopeEl.prepend(panel);
+    } else {
+      const main = document.querySelector('main, [role="main"]');
+      if (main) main.prepend(panel);
+    }
   }
 }
 
 // ─── Route detection ──────────────────────────────────────────────────────────
 function onRouteChange() {
   const url = location.href;
-  if (url.match(/\/jobs\/.*~[0-9a-f]+/i)) {
+  // Detect any job detail view — full page or slider panel
+  const isDetail = /(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(url);
+  if (isDetail) {
     setTimeout(processDetailPage, 900);
+    // Also keep scoring the list cards underneath the slider
+    setTimeout(processCards, 700);
   } else {
     setTimeout(processCards, 700);
   }
