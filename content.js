@@ -9,61 +9,76 @@ function scoreJob(d) {
   let score = 100;
   const flags = [], green = [];
 
-  // Client rating
+  // ── CLIENT RATING ──
   if (d.clientRating !== null && d.clientRating > 0) {
-    if (d.clientRating >= 4.7)      green.push('Top-rated client (' + d.clientRating + '★)');
-    else if (d.clientRating >= 4.0) green.push('Good client rating (' + d.clientRating + ')');
-    else if (d.clientRating < 3.5)  { score -= 25; flags.push('Low client rating: ' + d.clientRating); }
-    else                            { score -= 10; flags.push('Below-avg client rating: ' + d.clientRating); }
+    if (d.clientRating >= 4.8)       green.push('Top-rated client (' + d.clientRating + '★)');
+    else if (d.clientRating >= 4.5)  green.push('Good client rating (' + d.clientRating + ')');
+    else if (d.clientRating >= 4.0)  { score -= 5;  flags.push('Average client rating: ' + d.clientRating); }
+    else if (d.clientRating >= 3.5)  { score -= 15; flags.push('Below-avg client rating: ' + d.clientRating); }
+    else                             { score -= 25; flags.push('Low client rating: ' + d.clientRating); }
   } else {
     score -= 15; flags.push('No client rating — new to Upwork');
   }
 
-  // Hires
+  // ── CLIENT SPEND (track record) ──
+  if (d.clientSpend !== null) {
+    if (d.clientSpend === 0)           { score -= 15; flags.push('$0 spent — brand new account'); }
+    else if (d.clientSpend < 500)      { score -= 10; flags.push('Only $' + d.clientSpend + ' spent — very little history'); }
+    else if (d.clientSpend < 1000)     { score -= 3;  flags.push('Limited spend: $' + d.clientSpend); }
+    else if (d.clientSpend >= 50000)   green.push('$' + (d.clientSpend/1000).toFixed(0) + 'K+ spent — seasoned client 💪');
+    else if (d.clientSpend >= 10000)   green.push('$' + (d.clientSpend/1000).toFixed(0) + 'K+ spent');
+    else if (d.clientSpend >= 1000)    green.push('$' + (d.clientSpend/1000).toFixed(1) + 'K spent');
+  }
+
+  // ── CLIENT HIRES ──
   if (d.clientHires !== null) {
     if (d.clientHires === 0)      { score -= 10; flags.push('0 hires ever'); }
     else if (d.clientHires >= 10) green.push(d.clientHires + ' total hires');
+    else if (d.clientHires >= 3)  green.push(d.clientHires + ' hires');
   }
 
-  // Spend
-  if (d.clientSpend !== null) {
-    if (d.clientSpend >= 10000)   green.push('$' + (d.clientSpend/1000).toFixed(0) + 'k+ spent');
-    else if (d.clientSpend >= 1000) green.push('$' + (d.clientSpend/1000).toFixed(1) + 'k spent');
-    else if (d.clientSpend === 0) { score -= 10; flags.push('$0 spent — brand new account'); }
-  }
-
-  // Payment verified
-  if (d.paymentVerified === false)     { score -= 20; flags.push('Payment NOT verified'); }
+  // ── PAYMENT VERIFICATION ──
+  if (d.paymentVerified === false)     { score -= 20; flags.push('Payment NOT verified ⚠️'); }
   else if (d.paymentVerified === true) green.push('Payment verified ✓');
 
-  // Job age
+  // ── JOB AGE ──
   if (d.daysPosted !== null) {
     if (d.daysPosted > 60)      { score -= 30; flags.push('Posted ' + d.daysPosted + 'd ago — very stale'); }
     else if (d.daysPosted > 30) { score -= 20; flags.push('Posted ' + d.daysPosted + 'd ago — stale'); }
-    else if (d.daysPosted > 14) { score -= 8;  flags.push('Posted ' + d.daysPosted + 'd ago'); }
-    else if (d.daysPosted <= 1) green.push('Fresh — posted today');
-    else if (d.daysPosted <= 3) green.push('Posted ' + d.daysPosted + 'd ago');
+    else if (d.daysPosted > 14) { score -= 10; flags.push('Posted ' + d.daysPosted + 'd ago'); }
+    else if (d.daysPosted > 3)  { /* 4–14 days: neutral, no flag */ }
+    else if (d.daysPosted === 0) green.push('Posted today — very fresh 🔥');
+    else                         green.push('Posted ' + d.daysPosted + 'd ago — fresh');
   }
 
-  // Proposals (competition)
+  // ── PROPOSALS (competition) ──
   if (d.proposalsMid !== null) {
-    if (d.proposalsMid >= 50)      { score -= 20; flags.push('50+ proposals — very crowded'); }
-    else if (d.proposalsMid >= 25) { score -= 10; flags.push(d.proposalsMid + ' proposals'); }
-    else if (d.proposalsMid <= 5)  green.push('Only ~' + d.proposalsMid + ' proposals 🎯');
-    else                           green.push('~' + d.proposalsMid + ' proposals');
+    if (d.proposalsMid >= 50)       { score -= 20; flags.push('50+ proposals — very crowded'); }
+    else if (d.proposalsMid >= 30)  { score -= 12; flags.push('~' + d.proposalsMid + ' proposals — crowded'); }
+    else if (d.proposalsMid >= 20)  { score -= 7;  flags.push('~' + d.proposalsMid + ' proposals — competitive'); }
+    else if (d.proposalsMid >= 10)  { score -= 3;  flags.push('~' + d.proposalsMid + ' proposals'); }
+    else if (d.proposalsMid <= 5)   green.push('Only ~' + d.proposalsMid + ' proposals 🎯');
+    else                            green.push('~' + d.proposalsMid + ' proposals');
   }
 
-  // Hourly rate
+  // ── HOURLY RATE ──
   if (d.hourlyMid !== null) {
-    if (d.hourlyMid < 10)      { score -= 25; flags.push('$' + d.hourlyMid + '/hr — too low'); }
-    else if (d.hourlyMid < 20) { score -= 10; flags.push('Low rate: ~$' + d.hourlyMid + '/hr'); }
-    else if (d.hourlyMid >= 50) green.push('Good rate: ~$' + d.hourlyMid + '/hr');
+    if (d.hourlyMid < 10)       { score -= 25; flags.push('$' + d.hourlyMid + '/hr — race to bottom'); }
+    else if (d.hourlyMid < 20)  { score -= 15; flags.push('Low rate: ~$' + d.hourlyMid + '/hr'); }
+    else if (d.hourlyMid < 30)  { score -= 5;  flags.push('Below-market: ~$' + d.hourlyMid + '/hr'); }
+    else if (d.hourlyMid >= 60) green.push('Strong rate: ~$' + d.hourlyMid + '/hr 💰');
+    else if (d.hourlyMid >= 40) green.push('Good rate: ~$' + d.hourlyMid + '/hr');
+    else                        { /* $30–39: neutral */ }
   }
 
-  // Fixed budget
+  // ── FIXED BUDGET ──
   if (d.fixedBudget !== null && d.hourlyMid === null) {
-    if (d.fixedBudget < 50)       { score -= 20; flags.push('Budget <$50 — skip'); }
-    else if (d.fixedBudget >= 500) green.push('Budget: $' + d.fixedBudget);
+    if (d.fixedBudget < 50)         { score -= 25; flags.push('Budget <$50 — not worth it'); }
+    else if (d.fixedBudget < 150)   { score -= 15; flags.push('Very low budget: $' + d.fixedBudget); }
+    else if (d.fixedBudget < 300)   { score -= 8;  flags.push('Low budget: $' + d.fixedBudget); }
+    else if (d.fixedBudget < 500)   { score -= 3;  flags.push('Modest budget: $' + d.fixedBudget); }
+    else if (d.fixedBudget >= 2000) green.push('Strong budget: $' + d.fixedBudget + ' 💰');
+    else if (d.fixedBudget >= 500)  green.push('Decent budget: $' + d.fixedBudget);
   }
 
   score = Math.max(0, Math.min(100, score));
@@ -77,7 +92,6 @@ function scoreJob(d) {
 
   return { score, grade, color, flags, green };
 }
-
 function verdictText(score) {
   if (score >= 80) return 'Strong signals — apply with confidence.';
   if (score >= 65) return 'Looks decent — worth applying.';
