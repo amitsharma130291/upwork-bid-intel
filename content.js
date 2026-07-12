@@ -543,17 +543,15 @@ function processDetailPage() {
 
     // ── Stale slider guard ──
     // When the user clicks a different job the slider DOM briefly still holds
-    // the PREVIOUS job's content. Check that the job-uid attribute on the h4
-    // matches the current URL's job uid before scoring.
+    // the PREVIOUS job's content. The job-uid attribute in the DOM is a plain
+    // decimal number. The URL uid (captured by the regex above) is also decimal
+    // but has leading zeros — strip them to compare directly.
     if (sliderContent && jobUid) {
       const uidEl = sliderContent.querySelector('[job-uid]');
       if (uidEl) {
-        // DOM job-uid is decimal; convert current hex URL uid to decimal for comparison
-        try {
-          const domUid = uidEl.getAttribute('job-uid');
-          const urlUidDec = BigInt('0x' + jobUid).toString();
-          if (domUid !== urlUidDec) return false; // stale — not ready yet
-        } catch(e) { /* ignore BigInt errors on old browsers */ }
+        const domUid = uidEl.getAttribute('job-uid');
+        const urlUidDec = jobUid.replace(/^0+/, '');   // strip leading zeros
+        if (domUid !== urlUidDec) return false;         // stale — retry
       }
     }
 
