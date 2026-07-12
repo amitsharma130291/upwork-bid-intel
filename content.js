@@ -314,21 +314,53 @@ function renderPanel(result) {
   vEl.textContent = verdictText(score);
   R.appendChild(vEl);
 
-  if (green.length || flags.length) {
-    const chips = document.createElement('div');
-    chips.style.cssText = 'display:flex!important;flex-wrap:wrap!important;gap:4px!important;margin-bottom:8px!important;';
-    green.forEach(g => {
-      const c = document.createElement('span');
-      c.style.cssText = 'background:#f0fdf4!important;color:#166534!important;border:1px solid #bbf7d0!important;border-radius:5px!important;padding:2px 8px!important;font-size:11px!important;white-space:nowrap!important;';
-      c.textContent = '✓ ' + g.text; chips.appendChild(c);
-    });
-    flags.forEach(f => {
-      const c = document.createElement('span');
-      c.style.cssText = 'background:#fffbeb!important;color:#92400e!important;border:1px solid #fde68a!important;border-radius:5px!important;padding:2px 8px!important;font-size:11px!important;white-space:nowrap!important;';
-      c.textContent = '! ' + f.text + ' (−' + f.pts + ' pts)'; chips.appendChild(c);
-    });
-    R.appendChild(chips);
+  // ── Score breakdown table ──
+  const table = document.createElement('div');
+  table.style.cssText = 'margin-bottom:8px!important;';
+
+  function mkRow(icon, label, delta, rowColor) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex!important;align-items:baseline!important;justify-content:space-between!important;' +
+      'padding:2px 0!important;border-bottom:1px solid #f0f0f6!important;gap:8px!important;';
+    const left = document.createElement('span');
+    left.style.cssText = 'font-size:11px!important;color:' + rowColor + '!important;flex:1!important;min-width:0!important;';
+    left.textContent = icon + ' ' + label;
+    const right = document.createElement('span');
+    right.style.cssText = 'font-size:11px!important;font-weight:700!important;color:' + rowColor + '!important;flex-shrink:0!important;';
+    right.textContent = delta;
+    row.appendChild(left); row.appendChild(right);
+    return row;
   }
+
+  // Start row
+  const startRow = document.createElement('div');
+  startRow.style.cssText = 'display:flex!important;align-items:baseline!important;justify-content:space-between!important;' +
+    'padding:2px 0 3px!important;border-bottom:2px solid #e2e2ee!important;margin-bottom:2px!important;';
+  const sl = document.createElement('span');
+  sl.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#6060a0!important;';
+  sl.textContent = 'Started at';
+  const sr = document.createElement('span');
+  sr.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#6060a0!important;';
+  sr.textContent = '100';
+  startRow.appendChild(sl); startRow.appendChild(sr);
+  table.appendChild(startRow);
+
+  green.forEach(g => table.appendChild(mkRow('✓', g.text, '—', '#166534')));
+  flags.forEach(f => table.appendChild(mkRow('▼', f.text, '−' + f.pts, '#b45309')));
+
+  // Final score row
+  const finalRow = document.createElement('div');
+  finalRow.style.cssText = 'display:flex!important;align-items:baseline!important;justify-content:space-between!important;' +
+    'padding:3px 0 1px!important;border-top:2px solid #e2e2ee!important;margin-top:2px!important;';
+  const fl = document.createElement('span');
+  fl.style.cssText = 'font-size:11px!important;font-weight:700!important;color:#1a1a2e!important;';
+  fl.textContent = 'Final score';
+  const fr = document.createElement('span');
+  fr.style.cssText = 'font-size:13px!important;font-weight:900!important;color:' + color + '!important;';
+  fr.textContent = score;
+  finalRow.appendChild(fl); finalRow.appendChild(fr);
+  table.appendChild(finalRow);
+  R.appendChild(table);
 
   const foot = document.createElement('div');
   foot.style.cssText = 'font-size:10px!important;color:#a0a0b8!important;';
@@ -455,6 +487,18 @@ function processDetailPage() {
     }
 
     if (!text || text.trim().length < 30) return false; // signal: not ready yet
+
+    // ── Wait for client section to be present ──
+    // If "About the client" hasn't loaded yet, the score will be missing
+    // payment/rating/spend/hires data and will look artificially high.
+    // Check that at least one client signal is visible before we inject.
+    const hasClientSection = sliderContent && (
+      /payment\s+(un)?verified/i.test(text) ||
+      /spent/i.test(text) ||
+      /hires/i.test(text) ||
+      /\d+\s+reviews?/i.test(text)
+    );
+    if (!hasClientSection) return false; // client block still loading — retry
 
     const data = extractFromText(text);
     const result = scoreJob(data);
