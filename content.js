@@ -166,9 +166,10 @@ function extractFromText(text, activityText) {
   const avgM = text.match(/\$([\d.]+)\s*\/hr\s*avg\s+hourly\s+rate\s+paid/i);
   if (avgM) avgHourlyPaid = parseFloat(avgM[1]);
 
-  // Fixed budget
+  // Fixed budget — match both "est. budget: $N" and "$N Fixed-price" (Upwork modal format)
   let fixedBudget = null;
-  const fb = text.match(/(?:est\.?\s*budget|fixed)[:\s]*\$?([\d,]+)/i);
+  const fb = text.match(/(?:est\.?\s*budget|fixed\s*(?:price|budget)?)[:\s]*\$?([\d,]+)/i) ||
+             text.match(/\$([\d,.]+)\s*(?:fixed.price|fixed)/i);
   if (fb && !hourlyMid) fixedBudget = parseFloat(fb[1].replace(/,/g,''));
 
   // Client spend
