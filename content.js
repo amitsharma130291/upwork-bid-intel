@@ -132,8 +132,9 @@ function extractFromText(text) {
 
   // Hourly rate
   let hourlyMid = null;
-  const hr = text.match(/hourly[:\s$]*(\d+(?:\.\d+)?)\s*[-–]\s*\$?(\d+(?:\.\d+)?)/i);
-  const hs = text.match(/hourly[:\s$]*(\d+(?:\.\d+)?)/i);
+  // Require $ before digits to avoid matching "Hourly  1 open job" as $1/hr
+  const hr = text.match(/hourly[:\s]*\$([\d.]+)\s*[-–]\s*\$?([\d.]+)/i);
+  const hs = text.match(/hourly[:\s]*\$([\d.]+)/i);
   if (hr) hourlyMid = Math.round((+hr[1] + +hr[2]) / 2);
   else if (hs) hourlyMid = +hs[1];
 
@@ -249,8 +250,9 @@ function renderBadge(result) {
     }
 
     const foot = document.createElement('div');
-    foot.style.cssText = 'background:#111118!important;padding:5px 14px!important;font-size:10px!important;color:#5a5a72!important;border-top:1px solid #2e2e3e!important;';
-    foot.textContent = '⚡ Upwork Bid Intel · All local · No account';
+    foot.style.cssText = 'background:#111118!important;padding:6px 14px!important;font-size:10px!important;color:#5a5a72!important;border-top:1px solid #2e2e3e!important;line-height:1.5!important;';
+    foot.innerHTML = '⚡ Upwork Bid Intel · All local · No account<br>' +
+      '<span style="color:#4a4a62">Score based on visible data — may change once you open the job</span>';
     tip.appendChild(foot);
     document.body.appendChild(tip);
 
