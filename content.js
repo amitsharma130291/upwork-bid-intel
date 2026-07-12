@@ -392,7 +392,7 @@ function processCards() {
 // ─── Slider / detail page ─────────────────────────────────────────────────────
 function processDetailPage() {
   const m = location.href.match(/(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i);
-  const hasSlider = !!document.querySelector('.job-details-content, .job-details-card, .air3-card-sections, section.air3-card-section');
+  const hasSlider = !!(document.querySelector('.job-details-content') || document.querySelector('.job-details-card') || Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')));
   // Upwork sometimes opens the job modal without changing the URL.
   // If the slider exists, score it even when /details/~uid is absent.
   if (!m && !hasSlider) return;
@@ -409,13 +409,21 @@ function processDetailPage() {
     let text = '';
     let insertAfter = null;
 
-    // ── Strategy 1: div.job-details-content (the slider container) ──
-    // DOM: div.job-details-content > div.job-details-card.slider >
-    //      div.air3-card-sections > section.air3-card-section > h4
-    const sliderContent = document.querySelector('.job-details-content, .job-details-card, .air3-card-sections, section.air3-card-section');
+    // ── Strategy 1: find the job detail slider ──
+    // Upwork renders the slider as:
+    //   div.job-details-content > div.job-details-card > div.air3-card-sections
+    //   OR directly as div.air3-card-sections (when no outer wrapper)
+    // CRITICAL: when the slider is open the full page has MANY .air3-card-sections
+    // (one per list card). The modal one is uniquely the one containing an h4 title.
+    // List job cards use h3; the modal/slider uses h4.
+    let sliderContent =
+      document.querySelector('.job-details-content') ||
+      document.querySelector('.job-details-card') ||
+      Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
+      null;
     if (sliderContent) {
       text = sliderContent.textContent || '';
-      const titleEl = sliderContent.querySelector('h4, h3, h2, h1');
+      const titleEl = sliderContent.querySelector('h4, h2, h1');
       if (titleEl) insertAfter = titleEl;
     }
 
@@ -451,7 +459,7 @@ function processDetailPage() {
     if (insertAfter && insertAfter.parentNode) {
       insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
     } else {
-      const container = document.querySelector('.job-details-content, .air3-card-sections, section.air3-card-section, main') || document.body;
+      const container = document.querySelector('.job-details-content') || Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) || document.querySelector('main') || document.body;
       container.prepend(panel);
     }
     return true; // signal: success
@@ -493,7 +501,7 @@ new MutationObserver(() => {
 
   // Slider content appeared dynamically — inject panel even if Upwork
   // did not update the URL to /details/~uid.
-  const slider = document.querySelector('.job-details-content, .job-details-card, .air3-card-sections, section.air3-card-section');
+  const slider = document.querySelector('.job-details-content') || document.querySelector('.job-details-card') || Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4'));
   if (slider && !document.querySelector('[data-ubi-panel]')) {
     clearTimeout(throttle);
     throttle = setTimeout(processDetailPage, 300);
