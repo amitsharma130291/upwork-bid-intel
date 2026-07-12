@@ -516,18 +516,9 @@ function processDetailPage() {
            null;
   }
 
-  // Check slider exists AND belongs to the current job (job-uid attr must match if present)
+  // Check slider exists in DOM
   function sliderIsReady() {
-    const s = getSlider();
-    if (!s) return false;
-    if (jobUid) {
-      const uidEl = s.querySelector('[job-uid]');
-      if (uidEl) {
-        const domUid = uidEl.getAttribute('job-uid').replace(/^0+/, '');
-        if (domUid && domUid !== jobUid) return false; // still the old job
-      }
-    }
-    return s;
+    return getSlider();
   }
 
   // Check client section is present (payment/rating/spend/hires)
