@@ -519,7 +519,7 @@ function processDetailPage() {
 
   const jobUid = m ? m[1] : null;
 
-  function tryInject() {
+  function tryInject(force) {
     // Already injected for this exact URL?
     const existing = document.querySelector('[data-ubi-panel]');
     if (existing && existing.getAttribute('data-ubi-url') === currentUrl) return true;
@@ -625,7 +625,7 @@ function processDetailPage() {
         /\d+\s+reviews?/i.test(text)
       );
     }
-    if (!hasClientSection) return false; // client block still loading — retry
+    if (!hasClientSection && !force) return false; // client block still loading — retry
 
     const data = extractFromText(text);
     const result = scoreJob(data);
@@ -642,14 +642,21 @@ function processDetailPage() {
     return true; // signal: success
   }
 
-  // Try immediately, then retry at 800ms, 1800ms, 3500ms
-  // The slider loads asynchronously so content may not exist yet
+  // Retry chain: 500ms → 1200ms → 2200ms → 3500ms → 5500ms
+  // Last attempt forces inject even without client section (better partial than nothing)
   if (!tryInject()) {
     setTimeout(() => { if (!tryInject()) {
       setTimeout(() => { if (!tryInject()) {
-        setTimeout(tryInject, 1700);
+        setTimeout(() => { if (!tryInject()) {
+          // Final fallback: force inject with whatever data is available
+          setTimeout(() => {
+            if (!document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`)) {
+              tryInject(true); // force=true skips client section wait
+            }
+          }, 2000);
+        }}, 1300);
       }}, 1000);
-    }}, 800);
+    }}, 700);
   }
 }
 
@@ -676,13 +683,16 @@ new MutationObserver(() => {
     return;
   }
 
-  // Slider content appeared dynamically — inject panel even if Upwork
-  // did not update the URL to /details/~uid.
-  const slider = document.querySelector('.job-details-content') || document.querySelector('.job-details-card') || Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4'));
-  if (slider && !document.querySelector('[data-ubi-panel]')) {
-    clearTimeout(throttle);
-    throttle = setTimeout(processDetailPage, 300);
-    return;
+  // Slider or about-client appeared — re-trigger detail page scoring
+  if (/(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(location.href)) {
+    const slider = document.querySelector('.job-details-content') || document.querySelector('.job-details-card') || Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4'));
+    const curUrl = location.href.split('?')[0];
+    const alreadyDone = document.querySelector(`[data-ubi-panel][data-ubi-url="${curUrl}"]`);
+    if (slider && !alreadyDone) {
+      clearTimeout(throttle);
+      throttle = setTimeout(processDetailPage, 400);
+      return;
+    }
   }
 
   clearTimeout(throttle);
