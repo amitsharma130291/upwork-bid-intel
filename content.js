@@ -195,14 +195,16 @@ function renderBadge(result) {
   lbl.style.cssText = `font-size:12px!important;font-weight:700!important;color:${color}!important;`;
   lbl.textContent = score;
 
-  // "~" signals the score is based on partial data and may change when the job is opened
-  const tilde = document.createElement('span');
-  tilde.style.cssText = `font-size:10px!important;font-weight:400!important;color:${color}!important;opacity:0.65!important;margin-left:1px!important;`;
-  tilde.textContent = '~';
+  // "est." label signals the score is a preview based on visible card data only
+  const est = document.createElement('span');
+  est.style.cssText = `font-size:9px!important;font-weight:600!important;color:${color}!important;` +
+    `opacity:0.75!important;margin-left:3px!important;letter-spacing:0.2px!important;` +
+    `text-transform:uppercase!important;`;
+  est.textContent = 'est.';
 
   badge.appendChild(dot);
   badge.appendChild(lbl);
-  badge.appendChild(tilde);
+  badge.appendChild(est);
 
   // ── Hover tooltip ──
   function showTip() {
