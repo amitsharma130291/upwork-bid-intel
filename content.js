@@ -195,8 +195,14 @@ function renderBadge(result) {
   lbl.style.cssText = `font-size:12px!important;font-weight:700!important;color:${color}!important;`;
   lbl.textContent = score;
 
+  // "~" signals the score is based on partial data and may change when the job is opened
+  const tilde = document.createElement('span');
+  tilde.style.cssText = `font-size:10px!important;font-weight:400!important;color:${color}!important;opacity:0.65!important;margin-left:1px!important;`;
+  tilde.textContent = '~';
+
   badge.appendChild(dot);
   badge.appendChild(lbl);
+  badge.appendChild(tilde);
 
   // ── Hover tooltip ──
   function showTip() {
