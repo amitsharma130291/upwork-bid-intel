@@ -541,6 +541,22 @@ function processDetailPage() {
       Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
       null;
 
+    // ── Stale slider guard ──
+    // When the user clicks a different job the slider DOM briefly still holds
+    // the PREVIOUS job's content. Check that the job-uid attribute on the h4
+    // matches the current URL's job uid before scoring.
+    if (sliderContent && jobUid) {
+      const uidEl = sliderContent.querySelector('[job-uid]');
+      if (uidEl) {
+        // DOM job-uid is decimal; convert current hex URL uid to decimal for comparison
+        try {
+          const domUid = uidEl.getAttribute('job-uid');
+          const urlUidDec = BigInt('0x' + jobUid).toString();
+          if (domUid !== urlUidDec) return false; // stale — not ready yet
+        } catch(e) { /* ignore BigInt errors on old browsers */ }
+      }
+    }
+
     if (sliderContent) {
       if (isFullDetailPage) {
         // Full page: job signals (rate, proposals, age) are in the card container,
