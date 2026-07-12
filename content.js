@@ -481,18 +481,24 @@ function processCards() {
 
     scoredUrls.add(href);
 
-    // Scope: walk up to the <section> card boundary.
-    // DO NOT walk past the section — that lands on the list container
-    // holding ALL 30 cards, mixing every card's data together.
+    // Scope: walk up to nearest card boundary.
+    // Best Matches / Most Recent use <section>; Search page uses <article>.
+    // Stop before job-tile-list, search-results, or main containers.
     let scope = heading;
-    while (scope.parentElement && scope.tagName.toLowerCase() !== 'section') {
+    while (scope.parentElement) {
+      const tag = scope.parentElement.tagName.toLowerCase();
+      const cls = (scope.parentElement.className || '');
+      if (tag === 'section' || tag === 'article') { scope = scope.parentElement; break; }
+      if (cls.includes('job-tile-list') || cls.includes('search-results') ||
+          cls.includes('jobs-list') || tag === 'main') break;
       scope = scope.parentElement;
     }
     const text = scope.textContent || '';
-    // Proposals: read from DOM span.value inside .ca-item — immune to tooltip text injection
-    // textContent regex fails because Upwork injects tooltip HTML between "Proposals:" and "50+"
+
+    // Proposals: read from span.value WITHIN this card scope only
+    // (document-wide query bleeds values across cards)
     let domProposalsMid = null;
-    document.querySelectorAll('.ca-item').forEach(item => {
+    scope.querySelectorAll('.ca-item').forEach(item => {
       const title = item.querySelector('.title');
       if (title && /proposals/i.test(title.textContent)) {
         const val = (item.querySelector('.value, span.value') || {}).textContent || '';
@@ -508,10 +514,7 @@ function processCards() {
         }
       }
     });
-    const activityBodyM = document.body.textContent.match(/activity\s+on\s+this\s+job[\s\S]{0,500}/i);
-    const activityText = activityBodyM ? activityBodyM[0] : null;
-    const data = extractFromText(text, activityText);
-    // Override proposals with DOM-read value if available (more reliable)
+    const data = extractFromText(text);
     if (domProposalsMid !== null) data.proposalsMid = domProposalsMid;
     const result = scoreJob(data);
     const badge = renderBadge(result);
