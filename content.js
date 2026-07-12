@@ -510,14 +510,20 @@ function processDetailPage() {
   // If the slider exists, score it even when /details/~uid is absent.
   if (!m && !hasSlider) return;
 
-  // Remove stale panel from previous navigation
-  document.querySelectorAll('[data-ubi-panel]').forEach(el => el.remove());
+  const currentUrl = location.href.split('?')[0];
+
+  // Remove panels stamped for a DIFFERENT URL (stale), keep panels for current URL
+  document.querySelectorAll('[data-ubi-panel]').forEach(el => {
+    if (el.getAttribute('data-ubi-url') !== currentUrl) el.remove();
+  });
 
   const jobUid = m ? m[1] : null;
 
   function tryInject() {
-    // Already injected this navigation?
-    if (document.querySelector('[data-ubi-panel]')) return;
+    // Already injected for this exact URL?
+    const existing = document.querySelector('[data-ubi-panel]');
+    if (existing && existing.getAttribute('data-ubi-url') === currentUrl) return true;
+    if (existing) existing.remove(); // wrong URL — remove and re-score
 
     let text = '';
     let insertAfter = null;
@@ -542,16 +548,15 @@ function processDetailPage() {
       null;
 
     // ── Stale slider guard ──
-    // When the user clicks a different job the slider DOM briefly still holds
-    // the PREVIOUS job's content. The job-uid attribute in the DOM is a plain
-    // decimal number. The URL uid (captured by the regex above) is also decimal
-    // but has leading zeros — strip them to compare directly.
+    // Check job-uid attribute in the slider matches the URL uid (both decimal, strip leading zeros)
     if (sliderContent && jobUid) {
       const uidEl = sliderContent.querySelector('[job-uid]');
       if (uidEl) {
         const domUid = uidEl.getAttribute('job-uid');
-        const urlUidDec = jobUid.replace(/^0+/, '');   // strip leading zeros
-        if (domUid !== urlUidDec) return false;         // stale — retry
+        const urlUidStripped = jobUid.replace(/^0+/, '');
+        // Only block if UIDs are present AND clearly different
+        // (some jobs may not have job-uid attribute — don't block those)
+        if (domUid && urlUidStripped && domUid !== urlUidStripped) return false;
       }
     }
 
@@ -615,6 +620,7 @@ function processDetailPage() {
     const result = scoreJob(data);
     const panel = renderPanel(result);
     panel.setAttribute('data-ubi-panel', '1');
+    panel.setAttribute('data-ubi-url', currentUrl); // stamp with URL to detect stale later
 
     if (insertAfter && insertAfter.parentNode) {
       insertAfter.parentNode.insertBefore(panel, insertAfter.nextSibling);
