@@ -1,105 +1,257 @@
-/* Upwork Bid Intel v1.1 */
+/* ══════════════════════════════════════════════════════════════
+   Upwork Bid Intel v1.2 — Professional UI
+   ══════════════════════════════════════════════════════════════ */
 
-/* ── Compact badge (search cards) ── */
+/* ── Badge pill on job cards ───────────────────────────────── */
 .ubi-badge {
   display: inline-flex !important;
   align-items: center !important;
-  gap: 5px !important;
-  background: #1e1e2a !important;
-  border: 1px solid #35354a !important;
-  border-radius: 20px !important;
-  padding: 3px 10px 3px 7px !important;
+  gap: 6px !important;
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
   font-size: 12px !important;
+  font-weight: 700 !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
   line-height: 1.3 !important;
-  cursor: default !important;
+  cursor: pointer !important;
   user-select: none !important;
   white-space: nowrap !important;
-  vertical-align: middle !important;
+  position: relative !important;
+  border: none !important;
+  letter-spacing: 0.1px !important;
+  transition: opacity 0.15s !important;
+  z-index: 10 !important;
 }
+.ubi-badge:hover { opacity: 0.9 !important; }
 
-.ubi-dot {
-  width: 8px !important;
-  height: 8px !important;
+.ubi-badge-dot {
+  width: 7px !important;
+  height: 7px !important;
   border-radius: 50% !important;
   flex-shrink: 0 !important;
   display: inline-block !important;
+  opacity: 0.9 !important;
 }
 
-.ubi-num {
-  font-weight: 800 !important;
+.ubi-badge-label {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  font-family: inherit !important;
+  letter-spacing: 0.1px !important;
+}
+
+/* ── Custom tooltip (replaces native title tooltip) ───────── */
+.ubi-tooltip {
+  display: none !important;
+  position: absolute !important;
+  top: calc(100% + 6px) !important;
+  left: 0 !important;
+  z-index: 99999 !important;
+  width: 260px !important;
+  background: #1c1c24 !important;
+  border: 1px solid #3a3a4a !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3) !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  font-size: 12px !important;
   color: #e8e8f0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+.ubi-badge:hover .ubi-tooltip,
+.ubi-badge:focus .ubi-tooltip {
+  display: block !important;
+}
+
+/* Tooltip arrow */
+.ubi-tooltip::before {
+  content: '' !important;
+  position: absolute !important;
+  top: -5px !important;
+  left: 14px !important;
+  width: 8px !important;
+  height: 8px !important;
+  background: #1c1c24 !important;
+  border-left: 1px solid #3a3a4a !important;
+  border-top: 1px solid #3a3a4a !important;
+  transform: rotate(45deg) !important;
+}
+
+.ubi-tt-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 14px 10px !important;
+  border-bottom: 1px solid #2a2a38 !important;
+}
+
+.ubi-tt-score {
+  font-size: 26px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  flex-shrink: 0 !important;
+  width: 44px !important;
+  text-align: center !important;
+}
+
+.ubi-tt-grade {
   font-size: 13px !important;
-  font-family: inherit !important;
+  font-weight: 700 !important;
+  margin-bottom: 2px !important;
+  color: #e8e8f0 !important;
 }
 
-.ubi-lbl {
-  color: #9090a8 !important;
+.ubi-tt-verdict {
   font-size: 11px !important;
-  font-family: inherit !important;
+  color: #9090a8 !important;
+  line-height: 1.4 !important;
 }
 
-/* ── Detail page panel ── */
+.ubi-tt-signals {
+  padding: 8px 14px 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+.ubi-tt-row {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 6px !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+.ubi-tt-row.green { color: #6ee7b7 !important; }
+.ubi-tt-row.amber { color: #fcd34d !important; }
+
+.ubi-tt-icon {
+  flex-shrink: 0 !important;
+  font-size: 10px !important;
+  margin-top: 1px !important;
+}
+
+.ubi-tt-footer {
+  background: #14141b !important;
+  padding: 6px 14px !important;
+  font-size: 10px !important;
+  color: #5a5a72 !important;
+  border-top: 1px solid #2a2a38 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+/* ── Detail page panel ─────────────────────────────────────── */
 .ubi-panel {
-  background: #17171d !important;
-  border: 1px solid #2a2a35 !important;
-  border-left: 4px solid #7c6af7 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 14px !important;
+  background: #f8f9fa !important;
+  border: 1.5px solid #e0e0e8 !important;
+  border-left: 4px solid #6366f1 !important;
   border-radius: 10px !important;
   padding: 14px 16px !important;
   margin: 12px 0 16px !important;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
   font-size: 13px !important;
-  color: #e8e8f0 !important;
+  max-width: 680px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
 }
 
-.ubi-ph {
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  margin-bottom: 10px !important;
-}
-
-.ubi-plogo { font-size: 18px !important; }
-
-.ubi-ptitle {
-  font-weight: 800 !important;
-  font-size: 14px !important;
-  flex: 1 !important;
-  color: #e8e8f0 !important;
-}
-
-.ubi-pring {
-  border: 2px solid #7c6af7 !important;
-  border-radius: 8px !important;
-  padding: 6px 12px !important;
+/* Score block */
+.ubi-p-score {
+  flex-shrink: 0 !important;
   text-align: center !important;
-  min-width: 74px !important;
-  background: #0f0f13 !important;
+  min-width: 64px !important;
 }
 
-.ubi-pbig {
+.ubi-p-num {
   display: block !important;
-  font-size: 22px !important;
+  font-size: 32px !important;
   font-weight: 900 !important;
   line-height: 1 !important;
+  margin-bottom: 4px !important;
 }
 
-.ubi-psub {
-  display: block !important;
+.ubi-p-grade {
+  display: inline-block !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  background: currentColor !important;
+  border-radius: 4px !important;
+  padding: 2px 7px !important;
+}
+
+.ubi-p-grade-inner {
+  color: white !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+}
+
+/* Divider */
+.ubi-p-divider {
+  width: 1px !important;
+  background: #e0e0e8 !important;
+  align-self: stretch !important;
+  flex-shrink: 0 !important;
+}
+
+/* Right side */
+.ubi-p-right {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.ubi-p-verdict {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #1a1a2e !important;
+  margin-bottom: 8px !important;
+  line-height: 1.4 !important;
+}
+
+.ubi-p-signals {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+  margin-bottom: 4px !important;
+}
+
+.ubi-p-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  border-radius: 5px !important;
+  padding: 3px 8px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 1.3 !important;
+  white-space: nowrap !important;
+}
+
+.ubi-p-chip.green {
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+  border: 1px solid #a7f3d0 !important;
+}
+
+.ubi-p-chip.amber {
+  background: #fffbeb !important;
+  color: #92400e !important;
+  border: 1px solid #fde68a !important;
+}
+
+.ubi-p-footer {
+  margin-top: 8px !important;
   font-size: 10px !important;
   color: #9090a8 !important;
-  margin-top: 2px !important;
-}
-
-.ubi-pg { margin-bottom: 6px !important; }
-.ubi-pf { margin-bottom: 6px !important; }
-.ubi-gi { font-size: 12px !important; color: #86efac !important; padding: 2px 0 !important; }
-.ubi-fi { font-size: 12px !important; color: #fbbf24 !important; padding: 2px 0 !important; }
-
-.ubi-pfoot {
-  font-size: 10px !important;
-  color: #5a5a70 !important;
-  border-top: 1px solid #2a2a35 !important;
-  margin-top: 8px !important;
-  padding-top: 7px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
 }

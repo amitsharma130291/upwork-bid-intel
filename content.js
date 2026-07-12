@@ -179,41 +179,77 @@ function extractFromText(text) {
 }
 
 // ─── Badge rendering ──────────────────────────────────────────────────────────
+function verdictText(score, grade) {
+  if (score >= 80) return 'Strong signals — apply with confidence.';
+  if (score >= 65) return 'Looks decent — worth applying.';
+  if (score >= 45) return 'Some red flags — read carefully first.';
+  if (score >= 25) return 'Multiple warnings — probably skip.';
+  return 'Too many red flags — save your connects.';
+}
+
 function renderCompact(result) {
-  const { score, grade, color } = result;
+  const { score, grade, color, flags, green } = result;
+
+  // Badge pill — colour-coded background
+  const badgeBg = color + '22'; // translucent tint
   const div = document.createElement('span');
   div.className = 'ubi-badge';
   div.setAttribute('data-ubi', '1');
-  div.innerHTML =
-    `<span class="ubi-dot" style="background:${color}"></span>` +
-    `<span class="ubi-num">${score}</span>` +
-    `<span class="ubi-lbl">${grade}</span>`;
+  div.setAttribute('tabindex', '0');
+  div.style.cssText = `background:${badgeBg};color:${color};border:1.5px solid ${color}44;`;
 
-  // Full tooltip on hover
-  const ttLines = [];
-  if (result.green.length) ttLines.push('✅ ' + result.green.join('\n✅ '));
-  if (result.flags.length) ttLines.push('⚠️ ' + result.flags.join('\n⚠️ '));
-  div.title = `Bid Intel: ${grade} (${score}/100)\n\n${ttLines.join('\n\n')}`;
+  // Custom tooltip markup (no native title attr)
+  const greenRows = green.map(g => `<div class="ubi-tt-row green"><span class="ubi-tt-icon">✓</span><span>${g}</span></div>`).join('');
+  const flagRows  = flags.map(f => `<div class="ubi-tt-row amber"><span class="ubi-tt-icon">!</span><span>${f}</span></div>`).join('');
+
+  div.innerHTML = `
+    <span class="ubi-badge-dot" style="background:${color}"></span>
+    <span class="ubi-badge-label">${score} · ${grade}</span>
+    <div class="ubi-tooltip">
+      <div class="ubi-tt-header">
+        <div class="ubi-tt-score" style="color:${color}">${score}</div>
+        <div>
+          <div class="ubi-tt-grade" style="color:${color}">${grade}</div>
+          <div class="ubi-tt-verdict">${verdictText(score, grade)}</div>
+        </div>
+      </div>
+      <div class="ubi-tt-signals">
+        ${greenRows}${flagRows}
+      </div>
+      <div class="ubi-tt-footer">⚡ Upwork Bid Intel · No account · All local</div>
+    </div>
+  `;
   return div;
 }
 
 function renderPanel(result) {
-  const { score, grade, color, emoji, flags, green } = result;
+  const { score, grade, color, flags, green } = result;
+  const verdict = verdictText(score, grade);
+
+  // Chips for signals
+  const chips = [
+    ...green.map(g => `<span class="ubi-p-chip green">✓ ${g}</span>`),
+    ...flags.map(f => `<span class="ubi-p-chip amber">! ${f}</span>`),
+  ].join('');
+
+  // Light theme to blend with Upwork (which is white/grey)
   const div = document.createElement('div');
   div.className = 'ubi-panel';
   div.setAttribute('data-ubi', '1');
+  div.style.borderLeftColor = color;
   div.innerHTML = `
-    <div class="ubi-ph">
-      <span class="ubi-plogo">⚡</span>
-      <span class="ubi-ptitle">Bid Intel</span>
-      <div class="ubi-pring" style="border-color:${color}">
-        <span class="ubi-pbig" style="color:${color}">${score}</span>
-        <span class="ubi-psub">${emoji} ${grade}</span>
-      </div>
+    <div class="ubi-p-score">
+      <span class="ubi-p-num" style="color:${color}">${score}</span>
+      <span class="ubi-p-grade" style="background:${color}">
+        <span class="ubi-p-grade-inner">${grade}</span>
+      </span>
     </div>
-    ${green.length ? `<div class="ubi-pg">${green.map(g=>`<div class="ubi-gi">✅ ${g}</div>`).join('')}</div>` : ''}
-    ${flags.length ? `<div class="ubi-pf">${flags.map(f=>`<div class="ubi-fi">⚠️ ${f}</div>`).join('')}</div>` : ''}
-    <div class="ubi-pfoot">No account · All local · Upwork Bid Intel</div>
+    <div class="ubi-p-divider"></div>
+    <div class="ubi-p-right">
+      <div class="ubi-p-verdict">${verdict}</div>
+      <div class="ubi-p-signals">${chips}</div>
+      <div class="ubi-p-footer">⚡ Upwork Bid Intel &nbsp;·&nbsp; Scores update as you browse &nbsp;·&nbsp; All local, no account</div>
+    </div>
   `;
   return div;
 }
