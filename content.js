@@ -95,7 +95,7 @@ function extractFromText(text) {
 
   // Job age
   let daysPosted = null;
-  if (/posted\s+(just\s+now|today)/i.test(text) || /posted\s+\d+\s+hours?\s+ago/i.test(text)) daysPosted = 0;
+  if (/posted\s+(just\s+now|today)/i.test(text) || /posted\s+\d+\s+(?:hours?|minutes?|mins?)\s+ago/i.test(text)) daysPosted = 0;
   else if (/posted\s+yesterday/i.test(text)) daysPosted = 1;
   else { const m = text.match(/posted\s+(\d+)\s+days?\s+ago/i); if (m) daysPosted = +m[1]; }
   if (daysPosted === null) { const m = text.match(/posted\s+(\d+)\s+weeks?\s+ago/i); if (m) daysPosted = +m[1]*7; }
@@ -348,10 +348,13 @@ function processCards() {
 
     scoredUrls.add(href);
 
-    // Score: use the text of the heading's parent container
-    // Walk up 4 levels from heading to get a reasonable card scope
+    // Scope: walk up to the <section> card boundary.
+    // DO NOT walk past the section — that lands on the list container
+    // holding ALL 30 cards, mixing every card's data together.
     let scope = heading;
-    for (let i = 0; i < 5 && scope.parentElement; i++) scope = scope.parentElement;
+    while (scope.parentElement && scope.tagName.toLowerCase() !== 'section') {
+      scope = scope.parentElement;
+    }
     const text = scope.textContent || '';
     const data = extractFromText(text);
     const result = scoreJob(data);
@@ -406,7 +409,8 @@ function processDetailPage() {
     const heading = headings.find(h => !h.closest('nav, header, [class*="nav-v2"], [class*="sidebar"]'));
     if (heading) {
       let el = heading;
-      for (let i = 0; i < 5 && el.parentElement; i++) el = el.parentElement;
+      // Walk up to section boundary in slider
+    while (el.parentElement && el.tagName.toLowerCase() !== 'section' && el.tagName.toLowerCase() !== 'main') el = el.parentElement;
       text = el.textContent || '';
     }
   }
