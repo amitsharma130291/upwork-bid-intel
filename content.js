@@ -244,12 +244,16 @@ function renderBadge(result) {
 
   const badge = document.createElement('span');
   badge.setAttribute('data-ubi-badge', '1');
-  badge.style.cssText = `display:inline-flex!important;align-items:center!important;gap:5px!important;` +
+  badge.style.cssText = `display:inline-flex!important;flex-direction:column!important;align-items:flex-start!important;gap:2px!important;` +
     `background:${bg}!important;border:1.5px solid ${color}!important;border-radius:5px!important;` +
-    `padding:2px 8px!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;` +
+    `padding:3px 8px 4px!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;` +
     `font-size:12px!important;font-weight:700!important;color:${color}!important;cursor:default!important;` +
-    `user-select:none!important;white-space:nowrap!important;vertical-align:middle!important;line-height:1.5!important;` +
+    `user-select:none!important;white-space:nowrap!important;vertical-align:middle!important;line-height:1.2!important;` +
     `box-sizing:border-box!important;text-decoration:none!important;`;
+
+  // Top row: dot + score + EST.
+  const topRow = document.createElement('span');
+  topRow.style.cssText = 'display:inline-flex!important;align-items:center!important;gap:5px!important;';
 
   const dot = document.createElement('span');
   dot.style.cssText = `display:inline-block!important;width:7px!important;height:7px!important;` +
@@ -259,16 +263,22 @@ function renderBadge(result) {
   lbl.style.cssText = `font-size:12px!important;font-weight:700!important;color:${color}!important;`;
   lbl.textContent = score;
 
-  // "est." label signals the score is a preview based on visible card data only
   const est = document.createElement('span');
   est.style.cssText = `font-size:9px!important;font-weight:600!important;color:${color}!important;` +
-    `opacity:0.75!important;margin-left:3px!important;letter-spacing:0.2px!important;` +
-    `text-transform:uppercase!important;`;
+    `opacity:0.75!important;letter-spacing:0.2px!important;text-transform:uppercase!important;`;
   est.textContent = 'est.';
 
-  badge.appendChild(dot);
-  badge.appendChild(lbl);
-  badge.appendChild(est);
+  topRow.appendChild(dot);
+  topRow.appendChild(lbl);
+  topRow.appendChild(est);
+  badge.appendChild(topRow);
+
+  // Bottom row: hint text — lives INSIDE the badge, never clipped
+  const hint = document.createElement('span');
+  hint.style.cssText = `font-size:8px!important;font-weight:400!important;color:${color}!important;` +
+    `opacity:0.6!important;letter-spacing:0.1px!important;line-height:1!important;`;
+  hint.textContent = 'open for full score';
+  badge.appendChild(hint);
 
   // ── Hover tooltip ──
   function showTip() {
@@ -587,26 +597,9 @@ function processCards() {
     // Wrap in a block element so it doesn't collapse into the heading's flex row
     const wrap = document.createElement('div');
     wrap.setAttribute('data-ubi-badge', '1');
-    wrap.style.cssText = 'display:block!important;margin:3px 0!important;padding:0!important;line-height:1!important;position:relative!important;';
+    wrap.style.cssText = 'display:block!important;margin:3px 0!important;padding:0!important;line-height:1!important;';
     wrap.appendChild(badge);
 
-    // Small note below badge — absolutely positioned so Upwork's overflow:hidden doesn't clip it
-    const hint = document.createElement('div');
-    hint.style.cssText = [
-      'position:absolute!important',
-      'top:100%!important',
-      'left:0!important',
-      'margin-top:2px!important',
-      'font-size:9px!important',
-      'color:#9090b0!important',
-      'white-space:nowrap!important',
-      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important',
-      'line-height:1!important',
-      'pointer-events:none!important',
-      'z-index:10!important',
-    ].join(';');
-    hint.textContent = '⚡ est. — open for full score';
-    wrap.appendChild(hint);
 
 
     // Insert immediately after the heading
