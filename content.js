@@ -587,8 +587,26 @@ function processCards() {
     // Wrap in a block element so it doesn't collapse into the heading's flex row
     const wrap = document.createElement('div');
     wrap.setAttribute('data-ubi-badge', '1');
-    wrap.style.cssText = 'display:block!important;margin:3px 0!important;padding:0!important;line-height:1!important;';
+    wrap.style.cssText = 'display:block!important;margin:3px 0!important;padding:0!important;line-height:1!important;position:relative!important;';
     wrap.appendChild(badge);
+
+    // Small note below badge — absolutely positioned so Upwork's overflow:hidden doesn't clip it
+    const hint = document.createElement('div');
+    hint.style.cssText = [
+      'position:absolute!important',
+      'top:100%!important',
+      'left:0!important',
+      'margin-top:2px!important',
+      'font-size:9px!important',
+      'color:#9090b0!important',
+      'white-space:nowrap!important',
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important',
+      'line-height:1!important',
+      'pointer-events:none!important',
+      'z-index:10!important',
+    ].join(';');
+    hint.textContent = '⚡ est. — open for full score';
+    wrap.appendChild(hint);
 
 
     // Insert immediately after the heading
