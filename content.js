@@ -750,7 +750,14 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     });
 
     const result = scoreJob(data);
-    sendResponse({ result, url: location.href });
+    // isDetail = true when a job detail slider or full job page is open
+    const isDetail = !!(
+      document.querySelector('.job-details-content') ||
+      document.querySelector('.job-details-card') ||
+      Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
+      /(?:\/jobs\/|\/details\/)~[0-9a-f]+/i.test(location.href)
+    );
+    sendResponse({ result, url: location.href, isDetail });
   }
   return true;
 });

@@ -11,7 +11,22 @@ async function init() {
     if (!response?.result) throw new Error('no data');
 
     const { result, isDetail } = response;
-    const { score, grade, color, emoji, flags, green } = result;
+
+    // On listing pages (not a detail/modal page), don't show a job score —
+    // there's no single job to score. Show a "click a job" prompt instead.
+    if (!isDetail) {
+      document.getElementById('jobPanel').style.display = 'none';
+      document.getElementById('noJobPanel').style.display = 'block';
+      document.getElementById('noJobPanel').innerHTML =
+        '<div style="text-align:center;padding:16px 12px">' +
+        '<div style="font-size:28px;margin-bottom:8px">👆</div>' +
+        '<div style="font-size:13px;font-weight:700;color:#e8e8f0;margin-bottom:6px">Open a job to see its score</div>' +
+        '<div style="font-size:11px;color:#8080a0;line-height:1.5">Click any job card on the listing page to open it, then the score breakdown will appear here.</div>' +
+        '</div>';
+      return;
+    }
+
+    const { score, grade, color, flags, green } = result;
 
     document.getElementById('jobPanel').style.display = 'block';
     document.getElementById('noJobPanel').style.display = 'none';
@@ -23,7 +38,7 @@ async function init() {
     document.getElementById('scoreNum').textContent = score;
     document.getElementById('scoreGrade').textContent = grade || '';
 
-    document.getElementById('jobTitle').textContent = isDetail ? 'Job Detail Analysis' : 'Search Page Analysis';
+    document.getElementById('jobTitle').textContent = 'Job Score';
 
     // Flags
     const fl = document.getElementById('flagsList');
@@ -46,7 +61,7 @@ async function init() {
     stats.checked = (stats.checked || 0) + 1;
     if (score < 40) {
       stats.skipped = (stats.skipped || 0) + 1;
-      stats.connects = (stats.connects || 0) + 6; // avg connects per proposal
+      stats.connects = (stats.connects || 0) + 6;
     }
     await chrome.storage.local.set({ stats });
 
