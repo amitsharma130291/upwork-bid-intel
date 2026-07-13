@@ -360,6 +360,56 @@ function renderBadge(result) {
   return badge;
 }
 
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
+function renderSkeleton() {
+  const panel = document.createElement('div');
+  panel.setAttribute('data-ubi-panel', '1');
+  panel.setAttribute('data-ubi-skeleton', '1');
+  panel.style.cssText = [
+    'display:flex!important','align-items:stretch!important',
+    'background:#fff!important','border:1.5px solid #e2e2ee!important',
+    'border-left:4px solid #d0d0e8!important','border-radius:10px!important',
+    'margin:10px 0 14px!important','max-width:680px!important',
+    'overflow:hidden!important','box-sizing:border-box!important',
+    'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important',
+  ].join(';');
+
+  // Left placeholder
+  const L = document.createElement('div');
+  L.style.cssText = 'flex-shrink:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;padding:16px 18px!important;min-width:80px!important;background:#f8f8fc!important;border-right:1px solid #e8e8f0!important;gap:8px!important;';
+  const pulse = document.createElement('div');
+  pulse.style.cssText = 'width:44px!important;height:44px!important;border-radius:50%!important;background:linear-gradient(90deg,#e8e8f0 25%,#d0d0e8 50%,#e8e8f0 75%)!important;background-size:200% 100%!important;animation:ubi-pulse 1.4s ease-in-out infinite!important;';
+  const bar = document.createElement('div');
+  bar.style.cssText = 'width:36px!important;height:10px!important;border-radius:4px!important;background:linear-gradient(90deg,#e8e8f0 25%,#d0d0e8 50%,#e8e8f0 75%)!important;background-size:200% 100%!important;animation:ubi-pulse 1.4s ease-in-out infinite!important;';
+  L.appendChild(pulse); L.appendChild(bar); panel.appendChild(L);
+
+  // Right placeholder
+  const R = document.createElement('div');
+  R.style.cssText = 'flex:1!important;padding:12px 16px!important;display:flex!important;flex-direction:column!important;gap:8px!important;justify-content:center!important;';
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex!important;align-items:center!important;gap:6px!important;';
+  const icon = document.createElement('span'); icon.textContent = '⚡'; icon.style.fontSize='13px';
+  const lbl = document.createElement('span');
+  lbl.style.cssText = 'font-size:10px!important;font-weight:700!important;color:#8080a0!important;letter-spacing:0.5px!important;text-transform:uppercase!important;';
+  lbl.textContent = 'Bid Intel · Analysing…';
+  hdr.appendChild(icon); hdr.appendChild(lbl); R.appendChild(hdr);
+  [80,60,90,50].forEach(w => {
+    const s = document.createElement('div');
+    s.style.cssText = `width:${w}%!important;height:8px!important;border-radius:4px!important;background:linear-gradient(90deg,#e8e8f0 25%,#d0d0e8 50%,#e8e8f0 75%)!important;background-size:200% 100%!important;animation:ubi-pulse 1.4s ease-in-out infinite!important;`;
+    R.appendChild(s);
+  });
+  panel.appendChild(R);
+
+  // Inject keyframes once
+  if (!document.getElementById('ubi-pulse-style')) {
+    const st = document.createElement('style');
+    st.id = 'ubi-pulse-style';
+    st.textContent = '@keyframes ubi-pulse{0%{background-position:200% 0}100%{background-position:-200% 0}}';
+    document.head.appendChild(st);
+  }
+  return panel;
+}
+
 // ─── Detail panel ─────────────────────────────────────────────────────────────
 function renderPanel(result) {
   const { score, grade, color, flags, green, info = [] } = result;
@@ -628,27 +678,46 @@ function processDetailPage() {
   }
 
   // Attempt injection — returns true on success, false to retry
+  // Show skeleton immediately when slider appears
+  function showSkeleton(slider) {
+    if (document.querySelector('[data-ubi-panel]')) return; // already something there
+    const sk = renderSkeleton();
+    sk.setAttribute('data-ubi-url', currentUrl);
+    const titleEl = slider.querySelector('h4, h2, h1');
+    if (titleEl && titleEl.parentNode) titleEl.parentNode.insertBefore(sk, titleEl.nextSibling);
+    else slider.prepend(sk);
+  }
+
   function tryInject(force) {
-    // Already done for this URL?
-    if (document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`)) return true;
-    // Remove any stale panel from a different URL
-    document.querySelectorAll('[data-ubi-panel]').forEach(el => el.remove());
+    // Already done (real panel) for this URL?
+    const existing = document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`);
+    if (existing && !existing.hasAttribute('data-ubi-skeleton')) return true;
+
+    // Remove stale panels from a different URL
+    document.querySelectorAll('[data-ubi-panel]').forEach(el => {
+      if (el.getAttribute('data-ubi-url') !== currentUrl) el.remove();
+    });
 
     const slider = sliderIsReady();
     if (!slider) return false;
 
+    // Show skeleton while waiting for client data
+    showSkeleton(slider);
+
     const hasClient = clientIsReady(slider);
     if (!hasClient && !force) return false;
 
+    // Remove skeleton and inject real panel
+    document.querySelectorAll('[data-ubi-skeleton]').forEach(el => el.remove());
     return inject(slider, force);
   }
 
-  // Retry chain: immediate → 600ms → 1400ms → 2500ms → 4000ms → force at 6000ms
+  // Retry chain: immediate → 300ms → 600ms → 1000ms → 1800ms → force at 2500ms
   if (!tryInject()) {
     const delays = [300, 600, 1000, 1800, 2500];
     let attempt = 0;
     function retry() {
-      if (document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]`)) return;
+      if (document.querySelector(`[data-ubi-panel][data-ubi-url="${currentUrl}"]:not([data-ubi-skeleton])`)) return;
       const isLast = attempt >= delays.length;
       if (!tryInject(isLast)) {
         if (!isLast) {
