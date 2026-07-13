@@ -21,17 +21,17 @@ async function init() {
     circle.style.borderColor = color;
     document.getElementById('scoreNum').style.color = color;
     document.getElementById('scoreNum').textContent = score;
-    document.getElementById('scoreGrade').textContent = emoji + ' ' + grade;
+    document.getElementById('scoreGrade').textContent = grade || '';
 
     document.getElementById('jobTitle').textContent = isDetail ? 'Job Detail Analysis' : 'Search Page Analysis';
 
     // Flags
     const fl = document.getElementById('flagsList');
-    flags.forEach(f => { const d = document.createElement('div'); d.className='flag-item'; d.textContent='⚠️ '+f; fl.appendChild(d); });
+    flags.forEach(f => { const d = document.createElement('div'); d.className='flag-item'; const txt = typeof f === 'object' ? f.text : f; const pts = typeof f === 'object' && f.pts ? ' (−'+f.pts+' pts)' : ''; d.textContent='⚠️ '+txt+pts; fl.appendChild(d); });
 
     // Green
     const gl = document.getElementById('greenList');
-    green.forEach(g => { const d = document.createElement('div'); d.className='green-item'; d.textContent='✅ '+g; gl.appendChild(d); });
+    green.forEach(g => { const d = document.createElement('div'); d.className='green-item'; const txt = typeof g === 'object' ? g.text : g; d.textContent='✅ '+txt; gl.appendChild(d); });
 
     // Verdict
     let verdictText = '';
