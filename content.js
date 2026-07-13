@@ -277,7 +277,7 @@ function renderBadge(result) {
   const hint = document.createElement('span');
   hint.style.cssText = `font-size:8px!important;font-weight:400!important;color:${color}!important;` +
     `opacity:0.6!important;letter-spacing:0.1px!important;line-height:1!important;`;
-  hint.textContent = 'open for full score';
+  hint.textContent = 'open job for full score';
   badge.appendChild(hint);
 
   // ── Hover tooltip ──
