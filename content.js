@@ -605,8 +605,18 @@ function processDetailPage() {
   const m = location.href.match(/(?:\/jobs\/|\/details\/)~([0-9a-f]+)/i);
   const jobUid = m ? m[1].replace(/^0+/, '') : null; // strip leading zeros
 
-  // Find the modal/slider container — the air3-card-sections that has an h4
+  // Find the modal/slider container — widest scope that contains the job
   function getSlider() {
+    // Try widest first (full slider body includes client section)
+    return document.querySelector('.air3-slider-body') ||
+           document.querySelector('.job-details-content') ||
+           document.querySelector('.job-details-card') ||
+           Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
+           null;
+  }
+
+  // For insertion point we want the narrower content container with the h4
+  function getInsertContainer() {
     return document.querySelector('.job-details-content') ||
            document.querySelector('.job-details-card') ||
            Array.from(document.querySelectorAll('.air3-card-sections')).find(el => el.querySelector('h4')) ||
@@ -667,25 +677,28 @@ function processDetailPage() {
     panel.setAttribute('data-ubi-panel', '1');
     panel.setAttribute('data-ubi-url', currentUrl);
 
-    // Insert after the h4 title, inside the slider
-    const titleEl = slider.querySelector('h4, h2, h1');
+    // Insert after the h4 title — use narrower content container
+    const insertTarget = getInsertContainer() || slider;
+    const titleEl = insertTarget.querySelector('h4, h2, h1');
     if (titleEl && titleEl.parentNode) {
       titleEl.parentNode.insertBefore(panel, titleEl.nextSibling);
     } else {
-      slider.prepend(panel);
+      insertTarget.prepend(panel);
     }
     return true;
   }
 
   // Attempt injection — returns true on success, false to retry
   // Show skeleton immediately when slider appears
-  function showSkeleton(slider) {
+  function showSkeleton() {
     if (document.querySelector('[data-ubi-panel]')) return; // already something there
+    const insertTarget = getInsertContainer();
+    if (!insertTarget) return;
     const sk = renderSkeleton();
     sk.setAttribute('data-ubi-url', currentUrl);
-    const titleEl = slider.querySelector('h4, h2, h1');
+    const titleEl = insertTarget.querySelector('h4, h2, h1');
     if (titleEl && titleEl.parentNode) titleEl.parentNode.insertBefore(sk, titleEl.nextSibling);
-    else slider.prepend(sk);
+    else insertTarget.prepend(sk);
   }
 
   function tryInject(force) {
@@ -702,7 +715,7 @@ function processDetailPage() {
     if (!slider) return false;
 
     // Show skeleton while waiting for client data
-    showSkeleton(slider);
+    showSkeleton();
 
     const hasClient = clientIsReady(slider);
     if (!hasClient && !force) return false;
