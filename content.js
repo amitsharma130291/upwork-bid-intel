@@ -590,6 +590,13 @@ function processCards() {
     wrap.style.cssText = 'display:block!important;margin:3px 0!important;padding:0!important;line-height:1!important;';
     wrap.appendChild(badge);
 
+    // Micro-hint below the badge — visible without hovering
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font-size:9px!important;color:#9090b0!important;margin-top:2px!important;' +
+      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;line-height:1.3!important;';
+    hint.textContent = 'Open job for full score';
+    wrap.appendChild(hint);
+
     // Insert immediately after the heading
     if (heading.nextSibling) {
       heading.parentNode.insertBefore(wrap, heading.nextSibling);
