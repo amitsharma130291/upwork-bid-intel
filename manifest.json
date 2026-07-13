@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Upwork Bid Intel",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Instant job quality score on every Upwork listing. Spot ghost jobs, low-budget traps, and bad clients before you waste connects.",
   "permissions": [
     "storage",
